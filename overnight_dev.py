@@ -34,8 +34,38 @@ ITER_DIR   = PROJECT / "iterations"
 MAX_ITER   = 50
 SMOKE_TIMEOUT = 20   # seconds for headless test
 
-client = OpenAI(base_url=QWEN_BASE, api_key=QWEN_KEY)
+# Files that already work and should NOT be fully replaced — only enhanced
+LOCKED_FILES = {
+    "constants.py",  # All imports depend on this exact API
+}
 
+# Map task IDs to their target files (architect guidance)
+TASK_FILE_MAP = {
+    1: "constants.py",   # already done
+    2: "maze.py",
+    3: "player.py",
+    4: "enemy.py",
+    5: "bullet.py",
+    6: "radar.py",
+    7: "hud.py",
+    8: "game.py",
+    9: "main.py",
+    10: "sounds.py",
+    11: "maze.py",
+    12: "game.py",
+    13: "enemy.py",
+    14: "enemy.py",
+    15: "maze.py",
+    16: "particles.py",
+    17: "game.py",
+    18: "game.py",
+    19: "game.py",
+    20: "game.py",
+    21: "tests/test_game.py",
+    22: "game.py",
+}
+
+client = OpenAI(base_url=QWEN_BASE, api_key=QWEN_KEY)
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 
@@ -420,10 +450,22 @@ game most playable and fun right now."""
 
         task_id    = arch_data.get("task_id", pending[0]["id"])
         task_desc  = arch_data.get("task_desc", pending[0]["desc"])
-        target_file= arch_data.get("target_file", "src/game.py").replace("src/", "")
+        # Use the pre-mapped file for task, ignore architect's hallucinated target
+        target_file = TASK_FILE_MAP.get(task_id,
+                        arch_data.get("target_file", "src/game.py").replace("src/", ""))
         approach   = arch_data.get("approach", "improve game mechanics")
         log(f"  [Architect] Task: [{task_id}] {task_desc[:60]}")
         log(f"  [Architect] Target: {target_file}, Approach: {approach[:80]}")
+
+        # Skip locked files (constants.py is already correct and other files depend on it)
+        if target_file in LOCKED_FILES:
+            log(f"  [Orchestrator] Skipping locked file {target_file}, picking next task")
+            for t in tasks:
+                if t["id"] == task_id:
+                    t["status"] = "done"  # mark as done
+                    break
+            write_tasks(tasks)
+            continue
 
         # ── 2. CODER: implement the task ──────────────────────────────────────
         log("  [Coder] Writing code...")
