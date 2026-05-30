@@ -88,21 +88,109 @@ def list_src_files() -> list[str]:
 
 def call_agent(system: str, user: str, max_tokens: int = 4096,
                temp: float = 0.3) -> str:
-    """Call Qwen with a system + user prompt. Returns the response text."""
+    """Call Qwen with a system + user prompt. Returns the response text.
+    
+    Qwen3 models output chain-of-thought before the answer. We request
+    enough tokens for thinking + answer, then extract the final content.
+    """
     try:
+        # Request extra tokens to let the model think, then extract answer
+        actual_tokens = max_tokens + 1200  # extra for thinking
         resp = client.chat.completions.create(
             model=QWEN_MODEL,
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user",   "content": user},
             ],
-            max_tokens=max_tokens,
+            max_tokens=actual_tokens,
             temperature=temp,
         )
-        return resp.choices[0].message.content or ""
+        content = resp.choices[0].message.content or ""
+        return content
     except Exception as e:
         log(f"  [AGENT ERROR] {e}")
         return ""
+
+
+def extract_json(text: str) -> dict | None:
+    """Extract the last valid JSON object from a response (handles thinking preamble)."""
+    import re
+    # Find all JSON-like blocks
+    matches = list(re.finditer(r'\{[^{}]*\}', text, re.DOTALL))
+    # Try from last to first
+    for m in reversed(matches):
+        try:
+            return json.loads(m.group())
+        except Exception:
+            continue
+    # Try larger nested blocks
+    matches2 = list(re.finditer(r'\{.*?\}', text, re.DOTALL))
+    for m in reversed(matches2):
+        try:
+            return json.loads(m.group())
+        except Exception:
+            continue
+    return None
+
+
+def extract_code(text: str, filename: str) -> str:
+    """Extract the final Python code from a response (handles thinking preamble)."""
+    import re
+    
+    # 1. Try fenced code block (```python ... ```)
+    fenced = re.findall(r'```(?:python)?\n(.*?)```', text, re.DOTALL)
+    if fenced:
+        code = fenced[-1].strip()
+        ok, _ = syntax_check(code)
+        if ok and len(code) > 100:
+            return code
+    
+    # 2. Try finding the last block that starts with valid Python
+    # Look for docstring or import as the start of the actual code
+    patterns = [
+        rf'""".*?"""\nimport',     # docstring then imports
+        r'import pygame\n',
+        r'""".*?"""\n',
+        r'^import ',
+        r'^from ',
+        r'^class ',
+        r'^def ',
+    ]
+    
+    # Split by newlines, find where code starts (after thinking)
+    lines = text.split('\n')
+    best_start = -1
+    
+    # Look for the last occurrence of a module-level statement
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if (stripped.startswith('"""') or 
+            stripped.startswith("import ") or
+            stripped.startswith("from ") or
+            (stripped.startswith("class ") and not stripped.endswith(':') == False)):
+            # Check if the preceding line looks like thinking (not code)
+            if i > 0:
+                prev = lines[i-1].strip()
+                # If prev line is empty or a code comment, this might be real code
+                if prev == '' or prev.startswith('#') or prev.startswith('"""'):
+                    best_start = i
+    
+    if best_start >= 0:
+        candidate = '\n'.join(lines[best_start:])
+        ok, _ = syntax_check(candidate)
+        if ok and len(candidate) > 100:
+            return candidate
+    
+    # 3. Fallback: take everything after the last "---" separator or thinking marker
+    markers = ['\n---\n', '\nFINAL CODE:\n', '\nFINAL:\n', '\n\n\n']
+    for marker in markers:
+        if marker in text:
+            after = text.rsplit(marker, 1)[-1].strip()
+            ok, _ = syntax_check(after)
+            if ok and len(after) > 100:
+                return after
+    
+    return ""
 
 
 # ── Agent roles ───────────────────────────────────────────────────────────────
@@ -126,16 +214,16 @@ task to do in this iteration. Return JSON only:
   "expected_quality_gain": "<what improves>"
 }"""
 
-CODER_SYS = """You are the Lead Coder on a Python/pygame game. You write complete, 
-working Python code for a specific file.
+CODER_SYS = """You are an expert Python game developer. Write complete, production-quality Python files.
 
-Rules:
-- Output ONLY the complete new file content — no markdown fences, no explanation
-- Keep all existing functionality working — never break what already works  
-- Write clean, commented code
+CRITICAL RULES:
+- Output the complete Python file content inside a ```python code block
+- Start with the module docstring
+- Keep ALL existing functionality — never break working code
+- Write clean, well-commented code with docstrings
 - Use pygame-ce APIs correctly
-- Every class/function should have a docstring
-- The file must be syntactically valid Python 3.11"""
+- The code must be syntactically valid Python 3.11
+- After thinking through the approach, write the FINAL CODE in a ```python block"""
 
 REVIEWER_SYS = """You are a Code Reviewer for a Python/pygame game codebase.
 You review a proposed file change for:
@@ -322,36 +410,18 @@ PENDING TASKS (top {len(pending[:8])}):
 Pick the highest-value task to implement next. Consider what will make the 
 game most playable and fun right now."""
 
-        arch_resp = call_agent(ARCHITECT_SYS, arch_prompt, max_tokens=600)
-        log(f"  [Architect] Response: {arch_resp[:100]}...")
+        arch_resp = call_agent(ARCHITECT_SYS, arch_prompt, max_tokens=800)
+        log(f"  [Architect] Response length: {len(arch_resp)} chars")
 
-        # Parse architect response
-        try:
-            arch_data = json.loads(arch_resp)
-        except Exception:
-            # Try to extract JSON from response
-            import re
-            m = re.search(r'\{.*\}', arch_resp, re.DOTALL)
-            if m:
-                try:
-                    arch_data = json.loads(m.group())
-                except Exception:
-                    arch_data = {"task_id": pending[0]["id"],
-                                  "task_desc": pending[0]["desc"],
-                                  "target_file": "src/game.py",
-                                  "approach": "improve game loop and enemy behavior",
-                                  "expected_quality_gain": "better gameplay"}
-            else:
-                arch_data = {"task_id": pending[0]["id"],
-                              "task_desc": pending[0]["desc"],
-                              "target_file": "src/game.py",
-                              "approach": "improve game loop and enemy behavior",
-                              "expected_quality_gain": "better gameplay"}
+        # Parse architect response — extract last JSON block
+        arch_data = extract_json(arch_resp)
+        if not arch_data:
+            arch_data = {}
 
         task_id    = arch_data.get("task_id", pending[0]["id"])
         task_desc  = arch_data.get("task_desc", pending[0]["desc"])
         target_file= arch_data.get("target_file", "src/game.py").replace("src/", "")
-        approach   = arch_data.get("approach", "")
+        approach   = arch_data.get("approach", "improve game mechanics")
         log(f"  [Architect] Task: [{task_id}] {task_desc[:60]}")
         log(f"  [Architect] Target: {target_file}, Approach: {approach[:80]}")
 
@@ -382,17 +452,24 @@ RELATED MODULES (for integration reference):
 Write the complete improved {target_file} file. Implement the task fully.
 Return ONLY the complete Python file content, no markdown, no explanation."""
 
-        new_code = call_agent(CODER_SYS, coder_prompt, max_tokens=4096, temp=0.2)
+        new_code = call_agent(CODER_SYS, coder_prompt, max_tokens=5000, temp=0.2)
 
         if not new_code or len(new_code) < 100:
             log("  [Coder] Empty/too short response, skipping iteration")
             continue
 
-        # Strip markdown fences if present
-        if "```python" in new_code:
-            new_code = new_code.split("```python", 1)[1].split("```")[0].strip()
-        elif "```" in new_code:
-            new_code = new_code.split("```", 1)[1].split("```")[0].strip()
+        # Extract the actual code from the response (handles thinking preamble)
+        extracted = extract_code(new_code, target_file)
+        if extracted and len(extracted) > 100:
+            new_code = extracted
+            log(f"  [Coder] Extracted code: {len(new_code)} chars")
+        else:
+            # Strip markdown fences if present
+            if "```python" in new_code:
+                new_code = new_code.split("```python", 1)[1].split("```")[0].strip()
+            elif "```" in new_code:
+                new_code = new_code.split("```", 1)[1].split("```")[0].strip()
+            log(f"  [Coder] Raw code: {len(new_code)} chars")
 
         # Syntax check
         ok, err = syntax_check(new_code)
@@ -415,15 +492,12 @@ PROPOSED NEW CODE (first 2000 chars):
 
 Does this code correctly implement the task? Any bugs or integration issues?"""
 
-        review_resp = call_agent(REVIEWER_SYS, review_prompt, max_tokens=600)
-        log(f"  [Reviewer] Response: {review_resp[:100]}...")
+        review_resp = call_agent(REVIEWER_SYS, review_prompt, max_tokens=800)
+        log(f"  [Reviewer] Response length: {len(review_resp)} chars")
 
-        try:
-            review_data = json.loads(review_resp)
-        except Exception:
-            import re
-            m = re.search(r'\{.*\}', review_resp, re.DOTALL)
-            review_data = json.loads(m.group()) if m else {"approve": True, "score": 7, "issues": []}
+        review_data = extract_json(review_resp)
+        if not review_data:
+            review_data = {"approve": True, "score": 7, "issues": []}
 
         approved = review_data.get("approve", True)
         score    = review_data.get("score", 7)
