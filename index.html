@@ -77,7 +77,7 @@
     font-size:20px; color:#0ff; user-select:none; touch-action:none;
     box-shadow:0 0 8px rgba(0,255,255,0.5);
   }
-  .move-btn:active { background:rgba(0,255,255,0.55); color:#000; }
+  .move-btn:active, .move-btn.held { background:rgba(0,255,255,0.55); color:#000; }
   #move-up    { top:0;   left:46px; }
   #move-down  { bottom:0; left:46px; }
   #move-left  { top:46px; left:0; }
@@ -87,7 +87,7 @@
     background:rgba(255,255,255,0.15); border:2px solid #888;
     font-size:13px; color:#aaa; border-radius:50%;
   }
-  #move-stop:active { background:rgba(200,200,200,0.4); color:#fff; }
+  #move-stop:active, #move-stop.held { background:rgba(200,200,200,0.4); color:#fff; }
 
   /* Firing D-pad (right) - red tint */
   #firePad {
@@ -101,7 +101,7 @@
     font-size:20px; color:#ff6666; user-select:none; touch-action:none;
     box-shadow:0 0 10px rgba(255,60,60,0.6);
   }
-  .fire-btn:active { background:rgba(255,60,60,0.65); color:#fff; }
+  .fire-btn:active, .fire-btn.held { background:rgba(255,60,60,0.65); color:#fff; }
   #fire-up    { top:0;   left:46px; }
   #fire-down  { bottom:0; left:46px; }
   #fire-left  { top:46px; left:0; }
@@ -204,19 +204,110 @@ function playExplosionSound() {
   osc.start(); noise.start(); osc.stop(ctx.currentTime+0.65); noise.stop(ctx.currentTime+0.65);
 }
 
+// === Maze generator ===
+// Produces clean 4-way-symmetric Wizard-of-Wor style mazes with a guaranteed
+// open horizontal corridor at the warp row and a flood-fill connectivity pass
+// that knocks out walls if any open cell ends up isolated. The original
+// generator could leave isolated pockets and 2x2 fills that visually looked
+// like blobs; this design uses short vertical/horizontal wall "sticks" placed
+// on a coarse 2-cell lattice so corridors are always at least 1 cell wide.
 function generateMaze(level) {
-  const g = []; for(let r=0;r<ROWS;r++){g.push([]);for(let c=0;c<COLS;c++)g[r].push(0);}
-  for(let c=0;c<COLS;c++){g[0][c]=1;g[ROWS-1][c]=1;} for(let r=0;r<ROWS;r++){g[r][0]=1;g[r][COLS-1]=1;}
-  [(ROWS/2-1)|0,(ROWS/2)|0].forEach(r=>{g[r][0]=0;g[r][COLS-1]=0;});
-  let seed=level*7919+13; function rnd(){seed=(seed*1103515245+12345)&0x7fffffff;return seed/0x7fffffff;}
-  const halfC=(COLS/2)|0;
-  for(let r=2;r<ROWS-2;r+=2)for(let c=2;c<halfC;c+=2){
-    const k=rnd(); if(k<0.45){const len=(rnd()<0.5)?1:2;for(let i=0;i<len&&r+i<ROWS-2;i++){g[r+i][c]=1;g[r+i][COLS-1-c]=1;}}
-    else if(k<0.7){g[r][c]=1;g[r][c+1]=1;g[r][COLS-1-c]=1;g[r][COLS-2-c]=1;}
+  const g = [];
+  for(let r=0;r<ROWS;r++){g.push([]);for(let c=0;c<COLS;c++)g[r].push(0);}
+  // Outer border
+  for(let c=0;c<COLS;c++){g[0][c]=1;g[ROWS-1][c]=1;}
+  for(let r=0;r<ROWS;r++){g[r][0]=1;g[r][COLS-1]=1;}
+  // Warp openings on the two middle rows
+  const m1=(ROWS/2-1)|0, m2=(ROWS/2)|0;
+  g[m1][0]=0;g[m1][COLS-1]=0;g[m2][0]=0;g[m2][COLS-1]=0;
+
+  // Deterministic PRNG seeded by level
+  let seed=level*7919+13;
+  function rnd(){seed=(seed*1103515245+12345)&0x7fffffff;return seed/0x7fffffff;}
+
+  const halfC=(COLS/2)|0;     // 11
+  const halfR=(ROWS/2)|0;     // 7
+
+  // Place walls in the top-left quadrant and mirror 4 ways.
+  // Lattice points at (r,c) where r,c are even — between them we leave
+  // guaranteed open corridors so the maze never collapses into solid blobs.
+  function paintCell(r,c,v){
+    if(r<=0||r>=ROWS-1||c<=0||c>=COLS-1)return;
+    g[r][c]=v;
+    g[ROWS-1-r][c]=v;
+    g[r][COLS-1-c]=v;
+    g[ROWS-1-r][COLS-1-c]=v;
   }
-  for(let r=1;r<ROWS-1;r++)for(let c=1;c<COLS-1;c++)if(g[r][c]&&g[r+1][c]&&g[r][c+1]&&g[r+1][c+1]){g[r+1][c+1]=0;g[ROWS-2-r][COLS-2-c]=0;}
-  const midR=(ROWS/2)|0;for(let c=1;c<COLS-1;c++)g[midR][c]=0;
-  [[midR,2],[midR,COLS-3],[2,halfC-1],[2,halfC],[ROWS-3,halfC-1],[ROWS-3,halfC],[midR-1,halfC],[midR+1,halfC]].forEach(([r,c])=>{if(g[r]&&g[r][c]!==undefined)g[r][c]=0;});
+
+  for(let r=2;r<halfR;r+=2){
+    for(let c=2;c<halfC;c+=2){
+      const k=rnd();
+      if(k<0.40){
+        // Vertical stick, length 1-2
+        const len=(rnd()<0.55)?2:1;
+        for(let i=0;i<len && r+i<halfR;i++) paintCell(r+i,c,1);
+      } else if(k<0.65){
+        // Horizontal stick, length 2
+        paintCell(r,c,1);
+        if(c+1<halfC) paintCell(r,c+1,1);
+      } else if(k<0.78){
+        // Single pillar
+        paintCell(r,c,1);
+      }
+      // else: leave open
+    }
+  }
+
+  // Carve a clean horizontal corridor on the warp row (m1) so warps stay usable.
+  for(let c=1;c<COLS-1;c++) g[m1][c]=0;
+  // And keep the m2 row mostly open by clearing every wall that touches it.
+  // (We allow a few accent walls but ensure horizontal flow.)
+  for(let c=1;c<COLS-1;c++){
+    if(g[m2][c]===1 && rnd()<0.6) g[m2][c]=0;
+  }
+
+  // Guarantee player + canonical enemy spawn cells are open
+  const startR=ROWS-3, startC=(COLS/2)|0;
+  paintCell(startR,startC,0);
+  paintCell(startR,startC-1,0);
+  paintCell(2,2,0); paintCell(2,4,0); paintCell(2,6,0);
+  paintCell(2,halfC-1,0); paintCell(2,halfC,0);
+
+  // Connectivity: flood-fill from player spawn; knock walls to recover any
+  // isolated open pockets. This is the safety net that makes the maze playable
+  // regardless of random outcomes.
+  const visited=[];
+  for(let r=0;r<ROWS;r++) visited.push(new Array(COLS).fill(false));
+  const stack=[[startR,startC]]; visited[startR][startC]=true;
+  while(stack.length){
+    const [r,c]=stack.pop();
+    const nb=[[r+1,c],[r-1,c],[r,c+1],[r,c-1]];
+    for(const [nr,nc] of nb){
+      if(nr<0||nr>=ROWS||nc<0||nc>=COLS) continue;
+      if(g[nr][nc]===0 && !visited[nr][nc]){visited[nr][nc]=true;stack.push([nr,nc]);}
+    }
+  }
+  // Find any unreached open cell and carve a path to a visited neighbor.
+  for(let r=1;r<ROWS-1;r++){
+    for(let c=1;c<COLS-1;c++){
+      if(g[r][c]===0 && !visited[r][c]){
+        // Try to break a single wall to reach a visited neighbor (2 cells away)
+        const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+        let carved=false;
+        for(const [dr,dc] of dirs){
+          const wr=r+dr, wc=c+dc;
+          const tr=r+dr*2, tc=c+dc*2;
+          if(tr>0&&tr<ROWS-1&&tc>0&&tc<COLS-1&&visited[tr][tc]&&g[wr][wc]===1){
+            paintCell(wr,wc,0);
+            visited[r][c]=true; visited[wr][wc]=true; carved=true; break;
+          }
+        }
+        // Fallback: if no carve worked (rare), just fill the orphan with wall.
+        if(!carved) g[r][c]=1;
+      }
+    }
+  }
+
   return g;
 }
 
@@ -269,12 +360,23 @@ class GameScene extends Phaser.Scene {
   _begin(){document.getElementById('startScreen').classList.add('hidden');document.getElementById('gameOverScreen').classList.add('hidden');this.score=0;this.lives=3;this.level=1;this.updateHUD();this.startLevel();}
   startLevel(){
     this.clearAll();this.maze=generateMaze(this.level);this.drawMaze();
-    const midR=(ROWS/2)|0;const px=((COLS/2)|0)*CELL+CELL/2;const py=(ROWS-3)*CELL+CELL/2;
+    const midR=(ROWS/2)|0;
+    // Validate player spawn against the maze — fall back to BFS if blocked.
+    let pCol=(COLS/2)|0, pRow=ROWS-3;
+    const pSafe=this.findOpenCell(pCol,pRow); if(pSafe){pCol=pSafe.c;pRow=pSafe.r;}
+    const px=pCol*CELL+CELL/2, py=pRow*CELL+CELL/2;
     this.player=this.spawnEntity('player',px,py,{type:'player',speed:120,dir:DIR.NONE,alive:true});
     const enemyCount=Math.min(6+this.level,10);const types=[];
     for(let i=0;i<enemyCount;i++){const r=Math.random();if(this.level>=3&&r<0.2)types.push('thorwor');else if(this.level>=2&&r<0.45)types.push('garwor');else types.push('burwor');}
     const sp=[[2,2],[2,6],[2,10],[2,14],[2,18],[4,4],[4,18],[midR,2],[midR,COLS-3]];
-    types.forEach((t,i)=>{const p=sp[i%sp.length];this.spawnEnemy(t,p[1]*CELL+CELL/2,p[0]*CELL+CELL/2);});
+    types.forEach((t,i)=>{
+      const p=sp[i%sp.length];
+      // STRICT spawn validation: BFS to nearest open cell so enemies are
+      // never embedded inside a wall (was the original "stuck enemies" bug).
+      const safe=this.findOpenCell(p[1],p[0]);
+      if(!safe) return; // maze entirely solid — should never happen post-flood-fill
+      this.spawnEnemy(t,safe.c*CELL+CELL/2,safe.r*CELL+CELL/2);
+    });
     this.worlukSpawned=false;this.wizardSpawned=false;this.state='playing';
   }
   spawnEntity(key,x,y,props){const img=this.add.image(x,y,key);img.setDisplaySize(CELL-6,CELL-6);Object.assign(img,props);img.gridCol=Math.floor(x/CELL);img.gridRow=Math.floor(y/CELL);img.moveCooldown=0;this.entityLayer.add(img);return img;}
@@ -286,6 +388,26 @@ class GameScene extends Phaser.Scene {
   clearAll(){this.entityLayer.removeAll(true);this.bullets=[];this.enemyBullets=[];this.enemies=[];this.player=null;}
   drawMaze(){const g=this.mazeGfx;g.clear();g.fillStyle(0x000010,1);g.fillRect(0,0,MAZE_W,MAZE_H);for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)if(this.maze[r][c]){const x=c*CELL,y=r*CELL;g.fillStyle(0x4444ff,1);g.fillRect(x+2,y+2,CELL-4,CELL-4);g.fillStyle(0x6666ff,1);g.fillRect(x+4,y+4,CELL-8,CELL-8);g.fillStyle(0x2222aa,1);g.fillRect(x+6,y+6,CELL-12,CELL-12);}g.fillStyle(0xff00ff,0.4);[(ROWS/2-1)|0,(ROWS/2)|0].forEach(r=>{g.fillRect(0,r*CELL+10,4,CELL-20);g.fillRect(MAZE_W-4,r*CELL+10,4,CELL-20);});}
   isWall(c,r){if(r<0||r>=ROWS)return true;if(c<0||c>=COLS)return false;return this.maze[r][c]===1;}
+  // Find nearest open (non-wall) cell to (c,r) using BFS. Returns {c,r} or null.
+  // Used by all spawn paths so an enemy NEVER materializes inside a wall.
+  findOpenCell(c,r){
+    if(!this.isWall(c,r) && r>=0 && r<ROWS && c>=0 && c<COLS) return {c,r};
+    const seen=new Set();
+    const key=(cc,rr)=>rr*COLS+cc;
+    const q=[[c,r]]; seen.add(key(c,r));
+    while(q.length){
+      const [cc,rr]=q.shift();
+      if(rr>0 && rr<ROWS-1 && cc>0 && cc<COLS-1 && !this.isWall(cc,rr)) return {c:cc,r:rr};
+      for(const [dc,dr] of [[1,0],[-1,0],[0,1],[0,-1]]){
+        const nc=cc+dc, nr=rr+dr;
+        if(nr<=0||nr>=ROWS-1||nc<=0||nc>=COLS-1) continue;
+        const k=key(nc,nr);
+        if(seen.has(k)) continue;
+        seen.add(k); q.push([nc,nr]);
+      }
+    }
+    return null;
+  }
   centerOf(c,r){return{x:c*CELL+CELL/2,y:r*CELL+CELL/2};}
   isCentered(e){const cx=e.gridCol*CELL+CELL/2,cy=e.gridRow*CELL+CELL/2;return Math.abs(e.x-cx)<2&&Math.abs(e.y-cy)<2;}
   canMove(c,r,dir){const d=DVEC[dir];const nc=c+d.x,nr=r+d.y;if(nr>=0&&nr<ROWS&&(nc<0||nc>=COLS))return[(ROWS/2-1)|0,(ROWS/2)|0].includes(nr);return!this.isWall(nc,nr);}
@@ -302,9 +424,9 @@ class GameScene extends Phaser.Scene {
     if(this.player&&this.player.alive){for(let i=this.enemyBullets.length-1;i>=0;i--){const b=this.enemyBullets[i];if(Phaser.Math.Distance.Between(b.x,b.y,this.player.x,this.player.y)<18){b.destroy();this.enemyBullets.splice(i,1);this.killPlayer();break;}}}
     if(this.player&&this.player.alive){for(const e of this.enemies){if(e.alive&&Phaser.Math.Distance.Between(e.x,e.y,this.player.x,this.player.y)<26){this.killPlayer();break;}}}
     const rem=this.enemies.filter(e=>e.alive&&(e.type==='burwor'||e.type==='garwor'||e.type==='thorwor'));
-    if(rem.length===0&&!this.worlukSpawned){this.worlukSpawned=true;const m=(ROWS/2)|0;this.spawnEnemy('worluk',CELL+CELL/2,m*CELL+CELL/2);}
+    if(rem.length===0&&!this.worlukSpawned){this.worlukSpawned=true;const m=(ROWS/2)|0;const s=this.findOpenCell(1,m);if(s)this.spawnEnemy('worluk',s.c*CELL+CELL/2,s.r*CELL+CELL/2);}
     const wl=this.enemies.filter(e=>e.alive&&e.type==='worluk');
-    if(this.worlukSpawned&&wl.length===0&&!this.wizardSpawned){this.wizardSpawned=true;if(this.level>=2&&Math.random()<0.6){const m=(ROWS/2)|0;this.spawnEnemy('wizard',(COLS-2)*CELL+CELL/2,m*CELL+CELL/2);}else this.nextLevel();}
+    if(this.worlukSpawned&&wl.length===0&&!this.wizardSpawned){this.wizardSpawned=true;if(this.level>=2&&Math.random()<0.6){const m=(ROWS/2)|0;const s=this.findOpenCell(COLS-2,m);if(s)this.spawnEnemy('wizard',s.c*CELL+CELL/2,s.r*CELL+CELL/2);else this.nextLevel();}else this.nextLevel();}
     const wz=this.enemies.filter(e=>e.alive&&e.type==='wizard');if(this.wizardSpawned&&wz.length===0&&this.state==='playing')this.nextLevel();
     this.drawRadar();
   }
@@ -363,7 +485,7 @@ class GameScene extends Phaser.Scene {
     for(let i=0;i<14;i++){const p=this.add.circle(x,y,Phaser.Math.Between(2,5),Phaser.Math.RND.pick([0xffaa00,0xff6600,0xffdd44,0xffffff]));this.entityLayer.add(p);const ang=(i/14)*Math.PI*2+Phaser.Math.FloatBetween(-0.4,0.4);const spd=Phaser.Math.Between(80,180);const vx=Math.cos(ang)*spd,vy=Math.sin(ang)*spd;this.tweens.add({targets:p,x:x+vx*0.6,y:y+vy*0.6,alpha:0,scale:0.2,duration:Phaser.Math.Between(420,720),onComplete:()=>p.destroy()});}
   }
 
-  killPlayer(){if(this.state!=='playing')return;this.state='dying';this.explodeAt(this.player.x,this.player.y);this.player.alive=false;this.player.setVisible(false);this.lives--;this.updateHUD();this.time.delayedCall(900,()=>{if(this.lives<0)this.gameOver();else{const px=((COLS/2)|0)*CELL+CELL/2,py=(ROWS-3)*CELL+CELL/2;this.player.x=px;this.player.y=py;this.player.gridCol=Math.floor(px/CELL);this.player.gridRow=Math.floor(py/CELL);this.player.dir=DIR.NONE;this.player.queuedDir=DIR.NONE;this.queuedDir=DIR.NONE;this.player.setVisible(true);this.player.alive=true;this.state='playing';}});}
+  killPlayer(){if(this.state!=='playing')return;this.state='dying';this.explodeAt(this.player.x,this.player.y);this.player.alive=false;this.player.setVisible(false);this.lives--;this.updateHUD();this.time.delayedCall(900,()=>{if(this.lives<0)this.gameOver();else{const safe=this.findOpenCell((COLS/2)|0,ROWS-3)||{c:1,r:(ROWS/2)|0};const px=safe.c*CELL+CELL/2,py=safe.r*CELL+CELL/2;this.player.x=px;this.player.y=py;this.player.gridCol=safe.c;this.player.gridRow=safe.r;this.player.dir=DIR.NONE;this.player.queuedDir=DIR.NONE;this.queuedDir=DIR.NONE;this.player.setVisible(true);this.player.alive=true;this.state='playing';}});}
   nextLevel(){if(this.state!=='playing')return;this.state='levelEnd';this.level++;this.updateHUD();this.time.delayedCall(800,()=>this.startLevel());}
   gameOver(){this.state='gameover';document.getElementById('finalScore').textContent='SCORE: '+this.score;document.getElementById('gameOverScreen').classList.remove('hidden');}
 }
@@ -372,38 +494,292 @@ const config={type:Phaser.AUTO,parent:'phaserWrap',width:GAME_W,height:GAME_H,ba
 const game=new Phaser.Game(config);
 
 // ============================================================
-// TWIN D-PAD CONTROLS (Move + Independent Fire + Stop)
+// TWIN D-PAD CONTROLS — iOS-hardened touch system
+// ============================================================
+// DESIGN NOTES (why this looks the way it does):
+//
+// The previous per-pointer Map + pointer-events approach stopped responding
+// on iPhone after ~30 seconds of intense play. Root causes on iOS Safari:
+//
+//  1. Pointer events on iOS are unreliable under load: pointerup/pointercancel
+//     can be coalesced or dropped entirely, leaving stuck entries in the Map.
+//  2. setPointerCapture() can prevent a finger sliding between adjacent
+//     buttons from ever triggering the new button's pointerdown.
+//  3. Having BOTH pointer and touch handlers on the same element causes
+//     double-bookkeeping that drifts over time.
+//
+// New design:
+//   - Pure touch events (NO pointer events, NO pointer capture).
+//   - Listeners attached at the PAD container level — finger movement between
+//     buttons is tracked via elementFromPoint() so sliding works naturally.
+//   - Single source of truth: `activeTouches` Map<identifier, {kind,dir,el}>.
+//   - touchcancel + global document-level safety-net listeners catch any
+//     dropped end events.
+//   - visibilitychange / pagehide / blur all flush state.
+//   - Periodic watchdog rebuilds direction state from the Map every frame.
 // ============================================================
 document.addEventListener('DOMContentLoaded',()=>{
   const getScene=()=>window._gameScene;
+  const now=()=>performance.now();
 
-  // Movement pad
-  const moveMap={'move-up':DIR.UP,'move-down':DIR.DOWN,'move-left':DIR.LEFT,'move-right':DIR.RIGHT};
-  Object.keys(moveMap).forEach(id=>{
-    const btn=document.getElementById(id);
-    btn.addEventListener('pointerdown',e=>{e.preventDefault();const s=getScene();if(s)s.touchDir=moveMap[id];});
-    btn.addEventListener('pointerup',  e=>{e.preventDefault();const s=getScene();if(s)s.touchDir=DIR.NONE;});
-    btn.addEventListener('pointerleave',()=> {const s=getScene();if(s)s.touchDir=DIR.NONE;});
-    btn.addEventListener('pointercancel',()=> {const s=getScene();if(s)s.touchDir=DIR.NONE;});
-  });
-  // STOP button
-  document.getElementById('move-stop').addEventListener('pointerdown',e=>{
-    e.preventDefault();
+  // identifier -> { kind:'move'|'fire'|'stop', dir, el, lastTs }
+  // lastTs is updated on every touchstart/touchmove for that identifier so
+  // the watchdog can reap orphans whose touchend was dropped by iOS.
+  const activeTouches=new Map();
+  let fireRepeatTimer=null;
+
+  // Orphan reaping thresholds.
+  // STALE_MS: if no touch event referenced this identifier for this long, it's
+  //   almost certainly a dropped touchend — release it.
+  // MAX_TOUCHES: defensive sanity cap. If we ever exceed this (we shouldn't —
+  //   typical play uses 2 fingers), something is deeply wrong; flush all.
+  const STALE_MS=4000;
+  const MAX_TOUCHES=10;
+
+  // Direction → button-id lookups
+  const MOVE_DIRS={'move-up':DIR.UP,'move-down':DIR.DOWN,'move-left':DIR.LEFT,'move-right':DIR.RIGHT};
+  const FIRE_DIRS={'fire-up':DIR.UP,'fire-down':DIR.DOWN,'fire-left':DIR.LEFT,'fire-right':DIR.RIGHT};
+
+  // Annotate buttons with kind+dir for fast classification.
+  Object.entries(MOVE_DIRS).forEach(([id,d])=>{const el=document.getElementById(id);if(el){el.dataset.kind='move';el.dataset.dir=d;}});
+  Object.entries(FIRE_DIRS).forEach(([id,d])=>{const el=document.getElementById(id);if(el){el.dataset.kind='fire';el.dataset.dir=d;}});
+  const stopEl=document.getElementById('move-stop');
+  if(stopEl){stopEl.dataset.kind='stop';}
+
+  // Given a screen coord, walk the element hierarchy looking for one of our
+  // tagged buttons. (elementFromPoint may return a child SVG/text node.)
+  function buttonAt(x,y){
+    let el=document.elementFromPoint(x,y);
+    while(el && el!==document.body){
+      if(el.dataset && el.dataset.kind) return el;
+      el=el.parentElement;
+    }
+    return null;
+  }
+
+  function setPressedVisual(el,on){
+    if(!el)return;
+    if(on) el.classList.add('held'); else el.classList.remove('held');
+  }
+
+  // Rebuild scene direction state from activeTouches (last 'move' wins).
+  function syncSceneFromTouches(){
     const s=getScene();if(!s)return;
-    s.touchDir=DIR.NONE;s.queuedDir=DIR.NONE;
-    if(s.player){s.player.queuedDir=DIR.NONE;s.player.dir=DIR.NONE;}
-  });
+    let last=DIR.NONE;
+    for(const t of activeTouches.values()) if(t.kind==='move') last=t.dir;
+    s.touchDir=last;
+  }
 
-  // Firing pad (independent aim)
-  const fireMap={'fire-up':DIR.UP,'fire-down':DIR.DOWN,'fire-left':DIR.LEFT,'fire-right':DIR.RIGHT};
-  Object.keys(fireMap).forEach(id=>{
-    const btn=document.getElementById(id);
-    btn.addEventListener('pointerdown',e=>{
+  function doStop(){
+    const s=getScene();if(!s)return;
+    s.touchDir=DIR.NONE; s.queuedDir=DIR.NONE;
+    if(s.player){
+      s.player.queuedDir=DIR.NONE; s.player.dir=DIR.NONE;
+      s.player.x=s.player.gridCol*CELL+CELL/2;
+      s.player.y=s.player.gridRow*CELL+CELL/2;
+    }
+  }
+
+  function doFire(dir){
+    const s=getScene();if(s) s.tryFire(dir);
+  }
+
+  // Called when a touch enters/changes-to/leaves a button.
+  function acquire(identifier,btn){
+    if(!btn){release(identifier);return;}
+    const prev=activeTouches.get(identifier);
+    if(prev && prev.el===btn){ prev.lastTs=now(); return; } // refresh & no change
+    if(prev) setPressedVisual(prev.el,false);
+    const kind=btn.dataset.kind;
+    const dir=btn.dataset.dir?parseInt(btn.dataset.dir,10):DIR.NONE;
+    activeTouches.set(identifier,{kind,dir,el:btn,lastTs:now()});
+    setPressedVisual(btn,true);
+    if(kind==='stop') doStop();
+    else if(kind==='fire') doFire(dir);
+    syncSceneFromTouches();
+  }
+
+  function release(identifier){
+    const prev=activeTouches.get(identifier);
+    if(!prev)return;
+    setPressedVisual(prev.el,false);
+    activeTouches.delete(identifier);
+    syncSceneFromTouches();
+  }
+
+  // Reconcile our Map against the browser's authoritative active-touch list
+  // (`e.touches` is the current full set of touches on the document). Any
+  // identifier we own that isn't in that set has had its touchend dropped —
+  // release it. This is the single most important defense against the iOS
+  // "controls die after 30-45s" failure mode.
+  function reconcileWithEvent(e){
+    if(!e || !e.touches) return;
+    // Build a Set of live identifiers from the event.
+    const live=new Set();
+    for(let i=0;i<e.touches.length;i++) live.add(e.touches[i].identifier);
+    // Release any of our tracked TOUCH identifiers (>=0) not in the live set.
+    // Negative identifiers are reserved for mouse fallback — don't reap them.
+    const toRelease=[];
+    for(const id of activeTouches.keys()){
+      if(id>=0 && !live.has(id)) toRelease.push(id);
+    }
+    for(const id of toRelease) release(id);
+  }
+
+  // Continuous fire-on-hold: while any 'fire' touch is held, pulse tryFire
+  // every 180ms. The cooldown inside tryFire prevents spam.
+  function ensureFireTimer(){
+    if(fireRepeatTimer)return;
+    fireRepeatTimer=setInterval(()=>{
+      for(const t of activeTouches.values())
+        if(t.kind==='fire') doFire(t.dir);
+    },180);
+  }
+
+  // === Container-level touch listeners (movement pad + fire pad) ===
+  // Listening at the pad level (instead of per-button) means finger-slides
+  // between buttons work correctly and we can never lose a touchend that
+  // happens outside the originating button.
+  function bindPad(pad){
+    if(!pad)return;
+    pad.addEventListener('touchstart',e=>{
       e.preventDefault();
-      const s=getScene();if(!s)return;
-      s.tryFire(fireMap[id]); // fire in this direction immediately
+      for(const t of e.changedTouches){
+        acquire(t.identifier,buttonAt(t.clientX,t.clientY));
+      }
+      reconcileWithEvent(e);
+      ensureFireTimer();
+    },{passive:false});
+    pad.addEventListener('touchmove',e=>{
+      e.preventDefault();
+      for(const t of e.changedTouches){
+        // Only re-target if we already own this identifier — otherwise it
+        // belongs to a non-pad gesture and we shouldn't hijack it.
+        if(activeTouches.has(t.identifier)){
+          acquire(t.identifier,buttonAt(t.clientX,t.clientY));
+        }
+      }
+      reconcileWithEvent(e);
+    },{passive:false});
+    const endHandler=e=>{
+      // Don't preventDefault on end — iOS sometimes needs the natural end
+      // to clean up its own internal state.
+      for(const t of e.changedTouches) release(t.identifier);
+      reconcileWithEvent(e);
+    };
+    pad.addEventListener('touchend',endHandler);
+    pad.addEventListener('touchcancel',endHandler);
+
+    // --- Mouse fallback (desktop / trackpad / stylus without touch).
+    // Mirrors the touch contract using a single reserved identifier per pad
+    // so it routes through the same acquire/release/syncSceneFromTouches path.
+    // Without this, desktop users see directional buttons completely frozen
+    // after pressing START — keyboard still works, but on-screen taps do not.
+    const MOUSE_ID = pad.id==='firePad' ? -2 : -1;
+    let mouseDown = false;
+    pad.addEventListener('mousedown',e=>{
+      e.preventDefault();
+      mouseDown = true;
+      acquire(MOUSE_ID, buttonAt(e.clientX, e.clientY));
+      ensureFireTimer();
     });
-  });
+    pad.addEventListener('mousemove',e=>{
+      if(!mouseDown) return;
+      e.preventDefault();
+      acquire(MOUSE_ID, buttonAt(e.clientX, e.clientY));
+    });
+    const mouseEnd = ()=>{ if(mouseDown){ mouseDown=false; release(MOUSE_ID); } };
+    pad.addEventListener('mouseup', mouseEnd);
+    pad.addEventListener('mouseleave', mouseEnd);
+    // Global mouseup safety-net — if user releases off-pad, still clear state.
+    document.addEventListener('mouseup', mouseEnd, true);
+  }
+  bindPad(document.getElementById('movePad'));
+  bindPad(document.getElementById('firePad'));
+
+  // === Document-level safety net ===
+  // If a touchend/touchcancel ever escapes the pad (e.g. the user lifts
+  // their finger while it has slid off the pad area, or iOS dispatches the
+  // end event to a different target during scroll cancellation), still
+  // release the touch so we can't accumulate stuck entries.
+  document.addEventListener('touchend',e=>{
+    for(const t of e.changedTouches) if(activeTouches.has(t.identifier)) release(t.identifier);
+    reconcileWithEvent(e);
+  },true);
+  document.addEventListener('touchcancel',e=>{
+    for(const t of e.changedTouches) if(activeTouches.has(t.identifier)) release(t.identifier);
+    reconcileWithEvent(e);
+  },true);
+  // Also reconcile on any document-level touchstart/touchmove — catches the
+  // case where a finger lifted silently and then a NEW finger comes down,
+  // so we use the new event's authoritative `e.touches` snapshot to evict
+  // the stuck identifier before it can desync direction state.
+  document.addEventListener('touchstart',e=>{ reconcileWithEvent(e); },true);
+  document.addEventListener('touchmove',e=>{ reconcileWithEvent(e); },true);
+
+  // === Lifecycle cleanup ===
+  // If the tab goes background or the window loses focus, flush ALL touch
+  // state. iOS aggressively suspends touch dispatch during these events
+  // and we'd otherwise come back with stale active touches forever.
+  function flushAll(){
+    for(const t of activeTouches.values()) setPressedVisual(t.el,false);
+    activeTouches.clear();
+    const s=getScene(); if(s){ s.touchDir=DIR.NONE; }
+  }
+  document.addEventListener('visibilitychange',()=>{if(document.hidden) flushAll();});
+  window.addEventListener('pagehide',flushAll);
+  window.addEventListener('blur',flushAll);
+
+  // === Watchdogs (multi-layer) ===
+  //
+  // Layer 1 — every-frame scene sync (rAF):
+  //   Game logic respawns / scene transitions can clobber `scene.touchDir`
+  //   between our event callbacks. Re-asserting it every frame guarantees
+  //   that whatever the player's finger is actually doing wins within a
+  //   single frame of any clobber. This is what makes the controls "feel"
+  //   responsive indefinitely.
+  //
+  // Layer 2 — 250ms stale-touch reaper:
+  //   Reaps any identifier whose lastTs is older than STALE_MS. Dropped
+  //   touchends on iOS would otherwise leave a phantom "finger" forever
+  //   pinning a direction. 250ms keeps the recovery time imperceptible.
+  //
+  // Layer 3 — sanity cap:
+  //   If MAX_TOUCHES is exceeded we are catastrophically desynced; flush.
+  function rafSync(){
+    if(activeTouches.size===0){
+      const s=getScene(); if(s && s.touchDir!==DIR.NONE) s.touchDir=DIR.NONE;
+    } else {
+      syncSceneFromTouches();
+    }
+    requestAnimationFrame(rafSync);
+  }
+  requestAnimationFrame(rafSync);
+
+  setInterval(()=>{
+    const t=now();
+    // Reap stale touches (lastTs older than STALE_MS). Only touch identifiers
+    // (>=0); mouse fallback identifiers are managed explicitly elsewhere and
+    // don't update lastTs aggressively.
+    const stale=[];
+    for(const [id,info] of activeTouches.entries()){
+      if(id>=0 && (t-info.lastTs)>STALE_MS) stale.push(id);
+    }
+    for(const id of stale) release(id);
+
+    // Catastrophic sanity check.
+    if(activeTouches.size>MAX_TOUCHES) flushAll();
+
+    // Belt-and-suspenders: if Map is empty, force scene to NONE; if not,
+    // re-sync. (The rAF loop also does this, but having an independent
+    // interval-based check survives a paused rAF queue, e.g. while the
+    // tab is throttled.)
+    if(activeTouches.size===0){
+      const s=getScene(); if(s && s.touchDir!==DIR.NONE) s.touchDir=DIR.NONE;
+    } else {
+      syncSceneFromTouches();
+    }
+  },250);
 
   // Start / Restart
   function startBegin(){document.getElementById('startScreen').classList.add('hidden');(function tryB(n){if(window._gameScene&&window._gameScene._begin){window._gameScene._begin();return;}if(n>50)return;setTimeout(()=>tryB(n+1),100);})(0);}
