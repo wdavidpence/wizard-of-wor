@@ -177,15 +177,53 @@ const DVEC = {
 let audioCtx;
 function getAudio() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  // iOS Safari suspends AudioContext until a user gesture — call resume()
+  // every time we ask for it so audio always restarts after backgrounding
+  // or autoplay-policy suspension. Mirrors the Python sounds.py defensive
+  // mixer re-init pattern.
+  if (audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
   return audioCtx;
 }
+// Unlock audio on first user gesture (covers iOS autoplay block).
+function unlockAudio(){const c=getAudio();if(c.state==='suspended')c.resume().catch(()=>{});}
+document.addEventListener('touchstart',unlockAudio,{once:false,passive:true});
+document.addEventListener('mousedown',unlockAudio,{once:false,passive:true});
+document.addEventListener('keydown',unlockAudio,{once:false,passive:true});
+
 function playShootSound() {
   const ctx = getAudio();
+  // Frequency chirp 880→200Hz for that classic WoW laser zap (matches Python _chirp).
   const osc = ctx.createOscillator(); const gain = ctx.createGain(); const filter = ctx.createBiquadFilter();
-  osc.type = 'sawtooth'; osc.frequency.value = 880; filter.type = 'lowpass'; filter.frequency.value = 2200;
-  gain.gain.value = 0.25; gain.gain.linearRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(880, ctx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(200, ctx.currentTime + 0.12);
+  filter.type = 'lowpass'; filter.frequency.value = 2200;
+  gain.gain.setValueAtTime(0.28, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
   osc.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
   osc.start(); osc.stop(ctx.currentTime + 0.2);
+}
+function playEnemyShootSound(){
+  const ctx=getAudio();
+  const osc=ctx.createOscillator(),gain=ctx.createGain();
+  osc.type='square';
+  osc.frequency.setValueAtTime(400,ctx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(100,ctx.currentTime+0.14);
+  gain.gain.setValueAtTime(0.18,ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.16);
+  osc.connect(gain);gain.connect(ctx.destination);
+  osc.start();osc.stop(ctx.currentTime+0.18);
+}
+function playWorlukSound(){
+  const ctx=getAudio();
+  const osc=ctx.createOscillator(),gain=ctx.createGain();
+  osc.type='sine';
+  osc.frequency.setValueAtTime(1200,ctx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(200,ctx.currentTime+0.4);
+  gain.gain.setValueAtTime(0.35,ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.45);
+  osc.connect(gain);gain.connect(ctx.destination);
+  osc.start();osc.stop(ctx.currentTime+0.5);
 }
 function playExplosionSound() {
   const ctx = getAudio();
@@ -382,7 +420,12 @@ class GameScene extends Phaser.Scene {
   spawnEntity(key,x,y,props){const img=this.add.image(x,y,key);img.setDisplaySize(CELL-6,CELL-6);Object.assign(img,props);img.gridCol=Math.floor(x/CELL);img.gridRow=Math.floor(y/CELL);img.moveCooldown=0;this.entityLayer.add(img);return img;}
   spawnEnemy(type,x,y){
     const cfg={burwor:{speed:55,visible:1,points:100},garwor:{speed:75,visible:0.6,points:200,fades:true},thorwor:{speed:95,visible:0,points:500,invisible:true},worluk:{speed:140,visible:1,points:1000,flees:true},wizard:{speed:90,visible:1,points:2500,teleports:true}}[type];
-    const e=this.spawnEntity(type,x,y,{type,alive:true,dir:Phaser.Math.RND.pick([DIR.LEFT,DIR.RIGHT,DIR.UP,DIR.DOWN]),speed:cfg.speed,points:cfg.points,fades:cfg.fades||false,invisible:cfg.invisible||false,flees:cfg.flees||false,teleports:cfg.teleports||false,fireTimer:Phaser.Math.Between(2000,6000),teleportTimer:type==='wizard'?Phaser.Math.Between(3000,5000):0});
+    // Worluk fix: ESCAPE_GRACE = 1.2s window where escape doesn't count,
+    // and fleeDir aims at the FARTHER warp so the bonus is winnable rather
+    // than instantly escaping when spawn lands next to a warp tunnel.
+    const fleeRight = type==='worluk' ? (x < MAZE_W/2) : false;
+    const e=this.spawnEntity(type,x,y,{type,alive:true,dir:Phaser.Math.RND.pick([DIR.LEFT,DIR.RIGHT,DIR.UP,DIR.DOWN]),speed:cfg.speed,points:cfg.points,fades:cfg.fades||false,invisible:cfg.invisible||false,flees:cfg.flees||false,teleports:cfg.teleports||false,fireTimer:Phaser.Math.Between(2000,6000),teleportTimer:type==='wizard'?Phaser.Math.Between(3000,5000):0,escapeTimer:type==='worluk'?1200:0,fleeRight:fleeRight});
+    if(type==='worluk'){e.dir=fleeRight?DIR.RIGHT:DIR.LEFT;playWorlukSound();}
     if(cfg.invisible)e.setAlpha(0);else if(cfg.fades)e.setAlpha(cfg.visible);this.enemies.push(e);return e;
   }
   clearAll(){this.entityLayer.removeAll(true);this.bullets=[];this.enemyBullets=[];this.enemies=[];this.player=null;}
@@ -441,7 +484,14 @@ class GameScene extends Phaser.Scene {
 
   moveEntity(e,dt){
     const move=e.speed*dt;
-    if(this.isCentered(e)){e.x=e.gridCol*CELL+CELL/2;e.y=e.gridRow*CELL+CELL/2;
+    // Cell-anchored movement (port from Python enemy.py _move):
+    // lock the perpendicular axis to the current cell center BEFORE moving,
+    // so enemies/players can't drift diagonally off the corridor centerline.
+    const cx=e.gridCol*CELL+CELL/2, cy=e.gridRow*CELL+CELL/2;
+    if(e.dir===DIR.LEFT||e.dir===DIR.RIGHT) e.y=cy;
+    else if(e.dir===DIR.UP||e.dir===DIR.DOWN) e.x=cx;
+    if(this.isCentered(e)){
+      e.x=cx; e.y=cy;
       if(e.queuedDir!==undefined&&e.queuedDir!==DIR.NONE&&this.canMove(e.gridCol,e.gridRow,e.queuedDir))e.dir=e.queuedDir;
       if(!this.canMove(e.gridCol,e.gridRow,e.dir)&&e.type==='player')return;
     }
@@ -455,7 +505,27 @@ class GameScene extends Phaser.Scene {
     if(e.fades){const a=0.4+0.6*Math.abs(Math.sin(time/700));e.setAlpha(a);}
     else if(e.invisible){const dp=this.player?Phaser.Math.Distance.Between(e.x,e.y,this.player.x,this.player.y):9999;e.setAlpha(dp<80?0.4:0);}
     if(e.teleports){e.teleportTimer-=dt*1000;if(e.teleportTimer<=0){let tries=30;while(tries-->0){const c=Phaser.Math.Between(1,COLS-2),r=Phaser.Math.Between(1,ROWS-2);if(!this.isWall(c,r)){e.gridCol=c;e.gridRow=r;e.x=c*CELL+CELL/2;e.y=r*CELL+CELL/2;this.tweens.add({targets:e,alpha:{from:0,to:1},duration:200});break;}}e.teleportTimer=Phaser.Math.Between(3000,6000);}}
-    if(e.flees){if(this.isCentered(e)){const opts=this.validDirs(e.gridCol,e.gridRow);const midR=(ROWS/2)|0;const tx=e.x<MAZE_W/2?-CELL:MAZE_W+CELL,ty=midR*CELL+CELL/2;opts.sort((a,b)=>Phaser.Math.Distance.Between(e.x+DVEC[a].x*CELL,e.y+DVEC[a].y*CELL,tx,ty)-Phaser.Math.Distance.Between(e.x+DVEC[b].x*CELL,e.y+DVEC[b].y*CELL,tx,ty));if(opts.length)e.dir=opts[0];if(e.x<0||e.x>MAZE_W){this.score+=e.points;this.updateHUD();e.alive=false;e.destroy();return;}}return;}
+    if(e.flees){
+      // Worluk grace period: count down even before centered, so the
+      // 1.2s window doesn't get stretched by being mid-cell.
+      if(e.escapeTimer>0) e.escapeTimer=Math.max(0,e.escapeTimer-dt*1000);
+      if(this.isCentered(e)){
+        const opts=this.validDirs(e.gridCol,e.gridRow);
+        const midR=(ROWS/2)|0;
+        // Aim at the FARTHER warp tunnel (matches Python: _flee_dir picks the
+        // opposite-side warp so the player can see Worluk crossing the maze).
+        const tx=e.fleeRight?MAZE_W+CELL:-CELL;
+        const ty=midR*CELL+CELL/2;
+        opts.sort((a,b)=>Phaser.Math.Distance.Between(e.x+DVEC[a].x*CELL,e.y+DVEC[a].y*CELL,tx,ty)-Phaser.Math.Distance.Between(e.x+DVEC[b].x*CELL,e.y+DVEC[b].y*CELL,tx,ty));
+        if(opts.length)e.dir=opts[0];
+        // Only count escape after the grace window expires.
+        if(e.escapeTimer<=0 && (e.x<0||e.x>MAZE_W)){
+          this.score+=e.points; this.updateHUD(); playWorlukSound();
+          e.alive=false; e.destroy(); return;
+        }
+      }
+      return;
+    }
     if(this.isCentered(e)){let opts=this.validDirs(e.gridCol,e.gridRow);const back=this.opposite(e.dir);const non=opts.filter(d=>d!==back);const use=non.length?non:opts;let ch=null;if(this.player&&Math.random()<0.5){const dx=this.player.x-e.x,dy=this.player.y-e.y;const pref=Math.abs(dx)>Math.abs(dy)?(dx<0?DIR.LEFT:DIR.RIGHT):(dy<0?DIR.UP:DIR.DOWN);if(use.includes(pref))ch=pref;}e.dir=ch||Phaser.Math.RND.pick(use)||DIR.NONE;}else if(!this.canMove(e.gridCol,e.gridRow,e.dir)){e.x=e.gridCol*CELL+CELL/2;e.y=e.gridRow*CELL+CELL/2;}
     e.fireTimer-=dt*1000;if(e.fireTimer<=0){e.fireTimer=Phaser.Math.Between(2500,6000);if(this.player&&e.type!=='wizard')this.spawnEnemyBullet(e);}
   }
@@ -471,7 +541,7 @@ class GameScene extends Phaser.Scene {
     b.vx=vec.x*400;b.vy=vec.y*400;if(vec.y!==0)b.angle=90;this.entityLayer.add(b);this.bullets.push(b);playShootSound();
   }
 
-  spawnEnemyBullet(e){const vec=DVEC[e.dir];if(vec.x===0&&vec.y===0)return;const b=this.add.image(e.x+vec.x*16,e.y+vec.y*16,'ebullet');b.vx=vec.x*260;b.vy=vec.y*260;if(vec.y!==0)b.angle=90;this.entityLayer.add(b);this.enemyBullets.push(b);}
+  spawnEnemyBullet(e){const vec=DVEC[e.dir];if(vec.x===0&&vec.y===0)return;const b=this.add.image(e.x+vec.x*16,e.y+vec.y*16,'ebullet');b.vx=vec.x*260;b.vy=vec.y*260;if(vec.y!==0)b.angle=90;this.entityLayer.add(b);this.enemyBullets.push(b);playEnemyShootSound();}
 
   handleBulletCollisions(){
     for(let i=this.bullets.length-1;i>=0;i--){const b=this.bullets[i];let hit=false;
