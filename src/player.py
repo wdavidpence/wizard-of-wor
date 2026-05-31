@@ -29,6 +29,9 @@ class Player:
         self._target_col: float | None = None
         self._target_row: float | None = None
 
+        # ── FIX #5: Auto-respawn timer ──
+        self._death_time = 0.0          # seconds since death (for auto-respawn)
+
     # ── Input ─────────────────────────────────────────────────────────────────
 
     def handle_input(self, keys, maze):
@@ -107,6 +110,8 @@ class Player:
         self.alive = False
         self._invuln = RESPAWN_DELAY
         self._respawn_pending = True
+        # ── FIX #5: Start auto-respawn timer on death ──
+        self._death_time = 0.0
 
     def respawn(self, col: float, row: float):
         self.col = col
@@ -115,6 +120,8 @@ class Player:
         self._invuln = RESPAWN_DELAY
         self._respawn_pending = False
         self._bullet = None
+        # ── FIX #5: Reset auto-respawn timer ──
+        self._death_time = 0.0
 
     def is_invulnerable(self) -> bool:
         return self._invuln > 0

@@ -48,7 +48,6 @@ RED         = (255,  60,  60)
 GREEN       = (60,  255, 100)
 CYAN        = (0,   240, 255)
 PURPLE      = (160,  60, 255)
-AMBER       = (255, 170,  0)         # for invisible enemy radar pulse
 
 # ── Bullet ────────────────────────────────────────────────────────────────────
 BULLET_SPEED   = 12    # cells per second
@@ -60,7 +59,6 @@ BULLET_COLOR_E = (255,  80,  80)
 PLAYER_SPEED   = 5.5   # cells per second
 PLAYER_LIVES   = 3
 RESPAWN_DELAY  = 1.8   # seconds of invuln after respawn
-AUTO_RESPAWN_AFTER = 2.0  # seconds before auto-respawn kicks in
 
 # ── Enemy speeds (cells/sec) ──────────────────────────────────────────────────
 BURWOR_SPEED   = 2.5
@@ -68,15 +66,13 @@ GARWOR_SPEED   = 3.5
 THORWOR_SPEED  = 5.0
 WORLUK_SPEED   = 7.0
 WIZARD_SPEED   = 0     # teleports, doesn't walk
-WORLORD_SPEED  = 1.5   # Worlord boss speed
 
-# ── Enemy points ──────────────────────────────────────────────────────────────
+# ── Enemy points ─────────────────────────────────────────────────────────────
 BURWOR_PTS     = 100
 GARWOR_PTS     = 200
 THORWOR_PTS    = 500
 WORLUK_PTS     = 1000
 WIZARD_PTS     = 2500
-WORLORD_PTS    = 5000  # Worlord boss points
 FRIENDLY_FIRE  = 1000  # shooting the other player
 
 # ── Dungeon settings ─────────────────────────────────────────────────────────
@@ -85,17 +81,6 @@ ARENA_DUNGEON         = 4
 PIT_DUNGEON           = 13
 PIT_REPEAT            = 6
 WORLORD_DUNGEON       = 8    # Worlord pool starts here
-
-# ── Worlord boss ──────────────────────────────────────────────────────────────
-WORLORD_COLOR    = (255, 50, 50)     # bright red
-WORLORD_LIVES    = 2                 # 2 hits to kill
-WORLORD_RADIUS   = 1.5               # larger hitbox (cells)
-
-# ── Warp tunnels ──────────────────────────────────────────────────────────────
-EMPTY  = 0
-WALL_C = 1
-WARP_L = 2   # left warp tunnel entrance
-WARP_R = 3   # right warp tunnel entrance
 
 # ── Game states ───────────────────────────────────────────────────────────────
 STATE_TITLE    = "title"
@@ -109,14 +94,6 @@ STATE_WIZARD   = "wizard"    # Wizard active
 # ── Heartbeat ─────────────────────────────────────────────────────────────────
 HEARTBEAT_BASE   = 1.4    # seconds between beats (full dungeon)
 HEARTBEAT_MIN    = 0.25   # fastest beat at 1 enemy left
-
-# ── Hit freeze (arcade feel) ─────────────────────────────────────────────────
-HIT_FREEZE_DUR   = 0.12   # freeze duration (seconds)
-HIT_SLOW_DUR     = 0.12   # slowed speed duration after freeze
-
-# ── Screen flash ──────────────────────────────────────────────────────────────
-FLASH_DUR        = 0.1    # seconds of white flash on kill
-FLASH_ALPHA      = 0.3    # alpha level for flash overlay
 
 # ── Wizard taunts ─────────────────────────────────────────────────────────────
 WIZARD_TAUNTS = [

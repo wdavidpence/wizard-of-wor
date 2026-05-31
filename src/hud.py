@@ -28,16 +28,27 @@ class HUD:
             self._msg_timer -= dt
 
     def draw(self, screen: pygame.Surface, players: list, dungeon: int,
-             heartbeat_bpm: float = 60):
+             heartbeat_bpm: float = 60, dungeon_type: str = "STANDARD"):
         self._ensure_fonts()
 
         # Top bar background
         pygame.draw.rect(screen, HUD_BG, (0, 0, SCREEN_W, PLAY_Y))
         pygame.draw.line(screen, CYAN, (0, PLAY_Y - 2), (SCREEN_W, PLAY_Y - 2), 2)
 
+        # ── FIX #7: Dungeon type label (center top, above title) ──
+        type_labels = {
+            "ARENA": (255, 220, 50),
+            "PIT": (255, 60, 60),
+            "WORLORD": (255, 50, 50),
+            "STANDARD": (100, 180, 255),
+        }
+        type_color = type_labels.get(dungeon_type, (150, 150, 200))
+        lbl_type = self._font_xs.render(f"■ {dungeon_type}", True, type_color)
+        screen.blit(lbl_type, (SCREEN_W // 2 - lbl_type.get_width() // 2, 2))
+
         # Title center
         title = self._font_sm.render("WIZARD  OF  WOR", True, WIZARD_C)
-        screen.blit(title, title.get_rect(centerx=SCREEN_W // 2, y=8))
+        screen.blit(title, title.get_rect(centerx=SCREEN_W // 2, y=18))
 
         # P1 score (left)
         if len(players) >= 1:

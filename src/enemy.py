@@ -63,35 +63,60 @@ class Enemy:
             elif dr == 1:  self.facing = "down"
             elif dr == -1: self.facing = "up"
 
+    def _explode_on_wall(self, maze, particles, cell_size: int = CELL):
+        """Spawn particles where the bullet would hit the wall."""
+        ic, ir = int(self.col + 0.5), int(self.row + 0.5)
+        px = PLAY_X + ic * cell_size
+        py = PLAY_Y + ir * cell_size
+        # Slightly offset towards the side of the wall hit
+        if self.facing == "right":
+            px += cell_size - 8
+        elif self.facing == "left":
+            px += 8
+        elif self.facing == "down":
+            py += cell_size - 8
+        elif self.facing == "up":
+            py += 8
+        particles.explode(int(px), int(py), WALL, 8)
+
     def _move(self, dt: float, maze, tx=None, ty=None):
+        """Cell-anchored movement: snap to grid, move straight, pick new direction when blocked."""
         DIRS = {"right": (1, 0), "left": (-1, 0), "up": (0, -1), "down": (0, 1)}
         dc, dr = DIRS[self.facing]
 
+        # 1) Snap to nearest cell center — prevents drift
+        ic, ir = int(self.col + 0.5), int(self.row + 0.5)
+        self.col = float(ic) + 0.5
+        self.row = float(ir) + 0.5
+
+        # 2) Move one step forward in current facing direction
         nc = self.col + dc * self.speed * dt
         nr = self.row + dr * self.speed * dt
-        ic, ir = int(nc + 0.5), int(nr + 0.5)
 
-        hit_wall = maze.is_wall(ic, ir)
-        if hit_wall:
-            # Snap to cell center and choose new direction
-            self.col = round(self.col)
-            self.row = round(self.row)
+        # 3) Check if the next cell is a wall
+        nc_col = int(nc + 0.5)
+        nc_row = int(nr + 0.5)
+
+        if maze.is_wall(nc_col, nc_row):
+            # Hit a wall: stay centered, pick new direction
             self._choose_direction(maze, tx, ty)
             return
 
+        # 4) Move to new position
         self.col = nc
         self.row = nr
 
-        # Warp tunnels
-        wt = maze.is_warp(ic, ir)
+        # 5) Warp tunnels
+        wt = maze.is_warp(int(self.col + 0.5), int(self.row + 0.5))
         if wt == WARP_L:
             self.col = COLS - 2.0
         elif wt == WARP_R:
             self.col = 1.0
 
-        # Periodic direction change
+        # 6) Periodic direction change — only when near a cell center to prevent diagonal drift
+        dist_from_center = abs(self.col - (int(self.col + 0.5) + 0.5)) + abs(self.row - (int(self.row + 0.5) + 0.5))
         self._change_dir -= dt
-        if self._change_dir <= 0:
+        if self._change_dir <= 0 and dist_from_center < 0.4:
             self._change_dir = random.uniform(0.8, 2.5)
             if random.random() < 0.4:
                 self._choose_direction(maze, tx, ty)
@@ -104,9 +129,10 @@ class Enemy:
                           BULLET_COLOR_E, owner="enemy")
         return None
 
-    def update(self, dt: float, maze, players: list) -> Bullet | None:
+    def update(self, dt: float, maze, players: list):
+        """Return list of bullets (single or spread)."""
         if not self.alive:
-            return None
+            return []
         self._anim += dt
 
         # Find nearest live player for targeting
@@ -117,7 +143,8 @@ class Enemy:
             tx, ty = p.col, p.row
 
         self._move(dt, maze, tx, ty)
-        return self._try_shoot(dt)
+        shot = self._try_shoot(dt)
+        return [shot] if shot else []
 
     def kill(self):
         self.alive = False
@@ -254,14 +281,14 @@ class Thorwor(Enemy):
 
     def update(self, dt, maze, players):
         # Brief flash before shooting
-        fire = super().update(dt, maze, players)
-        if fire:
+        fire_list = super().update(dt, maze, players)
+        if fire_list:
             self.invisible = False
             self._vis_timer = 0.3
         self._vis_timer = max(0, self._vis_timer - dt)
         if self._vis_timer <= 0:
             self.invisible = True
-        return fire
+        return fire_list
 
     def _draw_shape(self, screen, cx, cy):
         # Demon-like shape when briefly visible
@@ -314,6 +341,112 @@ class Worluk(Enemy):
         pygame.draw.ellipse(screen, c2, (cx - 6, cy - 14, 12, 28))
         # Eye
         pygame.draw.circle(screen, (255, 255, 255), (cx, cy - 6), 3)
+
+
+# ── Worlord miniboss (dungeon 8+) ─────────────────────────────────────────────
+
+class Worlord(Enemy):
+    """Large, slow miniboss — 2 hits, 3-bullet spread shot, bright red."""
+
+    SHOT_COOLDOWN = 3.5
+    HP            = WORLORD_LIVES
+
+    def __init__(self, col, row):
+        super().__init__(col, row, "worlord")
+        self.speed   = WORLORD_SPEED
+        self.color   = WORLORD_COLOR
+        self.points  = WORLORD_PTS
+        self.invisible = False
+        self.hurt_flash = 0.0       # flash after taking damage
+        self.alive    = True
+
+    def update(self, dt, maze, players):
+        if not self.alive:
+            return None
+        self._anim += dt
+        self.hurt_flash = max(0, self.hurt_flash - dt)
+        return super().update(dt, maze, players)
+
+    def take_damage(self, dmg: int = 1):
+        """Override kill to support multi-hit."""
+        self.hurt_flash = 0.15
+        if self.HP > 1:
+            self.HP -= 1
+            return True  # still alive
+        self.alive = False
+        return False  # died
+
+    def _try_shoot(self, dt: float):
+        """Override to shoot a 3-bullet spread."""
+        self._shot_timer -= dt
+        if self._shot_timer <= 0:
+            self._shot_timer = self.SHOT_COOLDOWN * random.uniform(0.7, 1.3)
+            bullets = []
+            # Spread: left (-1), center (0), right (+1) in facing direction
+            spread_offsets = [-1, 0, 1]
+            for off in spread_offsets:
+                dir_name = self.facing
+                if off != 0:
+                    # Convert to the adjacent axis direction
+                    if self.facing == "right":
+                        dir_name = "down" if off < 0 else "up"
+                    elif self.facing == "left":
+                        dir_name = "down" if off < 0 else "up"
+                    elif self.facing == "up":
+                        dir_name = "left" if off < 0 else "right"
+                    elif self.facing == "down":
+                        dir_name = "left" if off < 0 else "right"
+                b = Bullet(self.col, self.row, dir_name,
+                           BULLET_COLOR_E, owner="enemy")
+                bullets.append(b)
+            return bullets
+        return None
+
+    def draw(self, screen):
+        if not self.alive:
+            return
+        cx = int(PLAY_X + self.col * CELL)
+        cy = int(PLAY_Y + self.row * CELL)
+        self._draw_shape(screen, cx, cy)
+
+    def _draw_shape(self, screen, cx, cy):
+        """Gargantuan red boss with crown-like spikes."""
+        base_color = self.color
+        if self.hurt_flash > 0:
+            base_color = (255, 255, 255)  # white flash
+        else:
+            pulse = int(20 * math.sin(self._anim * 3))
+            base_color = tuple(min(255, v + pulse) for v in self.color)
+
+        # Main body — larger than normal enemy
+        big = pygame.Rect(cx - 22, cy - 22, 44, 44)
+        pygame.draw.rect(screen, base_color, big, border_radius=8)
+        pygame.draw.rect(screen, (255, 100, 100), big.inflate(-6, -6), border_radius=6)
+
+        # Crown spikes
+        spike_y = cy - 28
+        for dx in [-18, -6, 6, 18]:
+            pygame.draw.polygon(screen, (255, 150, 50), [
+                (cx + dx, spike_y),
+                (cx + dx - 4, spike_y - 12),
+                (cx + dx + 4, spike_y - 12),
+            ])
+
+        # Eyes — menacing
+        pygame.draw.circle(screen, (255, 255, 0), (cx - 8, cy - 6), 5)
+        pygame.draw.circle(screen, (255, 255, 0), (cx + 8, cy - 6), 5)
+        pygame.draw.circle(screen, (200, 0, 0), (cx - 8, cy - 6), 2)
+        pygame.draw.circle(screen, (200, 0, 0), (cx + 8, cy - 6), 2)
+
+        # Mouth — jagged
+        pygame.draw.polygon(screen, (80, 0, 0), [
+            (cx - 14, cy + 8), (cx - 10, cy + 14), (cx - 4, cy + 10),
+            (cx, cy + 16), (cx + 4, cy + 10), (cx + 10, cy + 14),
+            (cx + 14, cy + 8),
+        ])
+
+        # Border glow
+        pygame.draw.rect(screen, (255, 80, 80), big, 2, border_radius=8)
 
 
 # ── Wizard of Wor ─────────────────────────────────────────────────────────────

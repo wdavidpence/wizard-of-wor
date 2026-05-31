@@ -24,9 +24,9 @@ class Radar:
             pygame.draw.line(screen, RADAR_GRID, (rx + c, ry), (rx + c, ry + rh), 1)
         pygame.draw.line(screen, RADAR_GRID, (rx, ry + rh // 2), (rx + rw, ry + rh // 2), 1)
 
-        # Warp tunnel markers
-        wr = maze_warp_row_frac = (ROWS - 1 - 4) / ROWS
-        ty = int(ry + wr * rh)
+        # Warp tunnel markers on radar
+        warp_row_frac = (ROWS - 1 - 4) / ROWS
+        ty = int(ry + warp_row_frac * rh)
         pygame.draw.line(screen, (0, 140, 120), (rx, ty), (rx + 16, ty), 2)
         pygame.draw.line(screen, (0, 140, 120), (rx + rw - 16, ty), (rx + rw, ty), 2)
 
@@ -41,7 +41,7 @@ class Radar:
             glow = tuple(min(255, v + 80) for v in color[:3])
             pygame.draw.circle(screen, glow, (px, py), size + 2, 1)
 
-        # Draw enemies (ALL, even invisible — radar is omniscient)
+        # ── FIX #8: Invisible enemies pulse amber on radar ──
         for e in enemies:
             if not e.alive:
                 continue
@@ -52,10 +52,17 @@ class Radar:
                 "thorwor": THORWOR_C,
                 "worluk":  WORLUK_C,
                 "wizard":  WIZARD_C,
+                "worlord": WORLORD_COLOR,
             }
             c = colors.get(e.etype, WHITE)
-            blink = e.invisible  # blink for invisible enemies
-            dot(fx, fy, c, size=4, blink=blink)
+            if e.invisible:
+                # Pulse amber when invisible
+                pulse = int(200 + 55 * abs(math.sin(pygame.time.get_ticks() / 200)))
+                c = (pulse, int(pulse * 0.65), 0)  # amber tint
+                dot(fx, fy, c, size=4, blink=False)
+            else:
+                blink = e.invisible  # blink for invisible enemies
+                dot(fx, fy, c, size=4, blink=blink)
 
         # Draw players
         for p in players:

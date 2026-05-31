@@ -7,7 +7,7 @@ import os
 from src.constants import *
 from src.maze import Maze
 from src.player import Player
-from src.enemy import Burwor, Garwor, Thorwor, Worluk, WizardOfWor
+from src.enemy import Burwor, Garwor, Thorwor, Worluk, WizardOfWor, Worlord
 from src.bullet import Bullet
 from src.radar import Radar
 from src.hud import HUD
@@ -25,6 +25,12 @@ class Game:
         self._title_blink  = 0.0
         self._screenshake  = 0.0
         self._shake_offset = (0, 0)
+
+        # Hit-freeze & flash effects (arcade feel)
+        self._freeze        = 0.0     # remaining freeze time
+        self._freeze_speed  = 1.0     # speed multiplier (1.0 = normal, 0.5 = slow)
+        self._flash         = 0.0     # remaining flash time
+        self._flash_alpha   = FLASH_ALPHA
 
         self.maze      = Maze(1)
         self.players   = []
@@ -77,6 +83,17 @@ class Game:
             self.players.append(p2)
         self._load_dungeon(self.dungeon)
 
+    def _get_dungeon_type(self, n: int) -> str:
+        """Return a human-readable dungeon type label."""
+        if n == ARENA_DUNGEON:
+            return "ARENA"
+        elif (n == PIT_DUNGEON) or ((n > PIT_DUNGEON) and (n - PIT_DUNGEON) % PIT_REPEAT == 0):
+            return "PIT"
+        elif n >= WORLORD_DUNGEON:
+            return "WORLORD"
+        else:
+            return "STANDARD"
+
     def _load_dungeon(self, n: int):
         self.maze  = Maze(n)
         self.enemies = []
@@ -103,6 +120,14 @@ class Game:
         # Spawn initial Burwors
         self._spawn_burwors(DUNGEON_BURWORS_START)
 
+        # Worlord boss for dungeons 8+
+        if n >= WORLORD_DUNGEON:
+            c, r = self._random_spawn()
+            self.enemies.append(Worlord(c, r))
+            self._total_enemies_spawned += 1
+            self.hud.show_message("★ WORLORD ★", WORLORD_COLOR, 2.5)
+            sounds.play("death_player", 0.3)
+
         # Bonus life before Arena
         if n == ARENA_DUNGEON:
             for p in self.players:
@@ -110,7 +135,8 @@ class Game:
             self.hud.show_message("BONUS WORRIOR!", (100, 255, 100), 3.0)
             sounds.play("bonus_life")
 
-        self.hud.show_message(f"DUNGEON  {n}", CYAN, 2.0)
+        dungeon_type = self._get_dungeon_type(n)
+        self.hud.show_message(f"DUNGEON  {n} [{dungeon_type}]", CYAN, 2.0)
 
     def _spawn_burwors(self, count: int):
         for _ in range(count):
@@ -136,6 +162,19 @@ class Game:
     # ── Main update ───────────────────────────────────────────────────────────
 
     def update(self, dt: float, keys):
+        # Decay freeze / flash timers
+        if self._freeze > 0:
+            self._freeze -= dt
+            if self._freeze <= 0:
+                self._freeze_speed = 1.0
+
+        if self._flash > 0:
+            self._flash -= dt
+
+        # Apply speed multiplier for hit-freeze
+        speed = self._freeze_speed
+        effective_dt = dt * speed
+
         if self._screenshake > 0:
             self._screenshake -= dt
             mx = int(6 * self._screenshake)
@@ -150,7 +189,10 @@ class Game:
         if self.state == STATE_TITLE:
             self._update_title(dt, keys)
         elif self.state == STATE_PLAYING:
-            self._update_playing(dt, keys)
+            if self._freeze > 0 and self._freeze_speed < 1.0:
+                # Hit-freeze: skip physics (classic arcade feel)
+                return
+            self._update_playing(effective_dt, keys)
         elif self.state == STATE_BETWEEN:
             self._update_between(dt)
         elif self.state == STATE_GAMEOVER:
@@ -170,6 +212,17 @@ class Game:
             self.state = STATE_PLAYING
 
     def _update_playing(self, dt: float, keys):
+        # Auto-respawn: after death timeout, spawn player back at home position
+        for p in self.players:
+            if not p.alive and p.lives > 0:
+                if not hasattr(p, '_death_time'):
+                    p._death_time = 0.0
+                p._death_time += dt
+                if p._death_time >= AUTO_RESPAWN_AFTER:
+                    start_col = 2.0 if p.pid == 1 else float(COLS - 3)
+                    p.respawn(start_col, float(ROWS // 2))
+                    sounds.play("warp", 0.4)
+
         # Player input + movement
         for p in self.players:
             if p.alive:
@@ -179,21 +232,21 @@ class Game:
         # Spawn sequencer
         self._update_spawn_seq(dt)
 
-        # Enemy update
-        alive_enemies = [e for e in self.enemies if e.alive]
-        self.heartbeat.update(dt, len(alive_enemies), max(1, self._total_enemies_spawned))
-
+        # Enemy update — collect bullets (handles spread shots from Worlord)
         new_bullets = []
         for e in self.enemies:
-            b = e.update(dt, self.maze, self.players)
-            if b:
-                new_bullets.append(b)
+            bullets = e.update(dt, self.maze, self.players)
+            if bullets:
+                if isinstance(bullets, list):
+                    new_bullets.extend(bullets)
+                else:
+                    new_bullets.append(bullets)
                 sounds.play("shot_enemy", 0.3)
         self.bullets.extend(new_bullets)
 
-        # Bullet update
+        # Bullet update — pass particles for wall explosions
         for b in self.bullets:
-            b.update(dt, self.maze)
+            b.update(dt, self.maze, self.particles)
 
         # Collision detection
         self._check_collisions()
@@ -207,7 +260,7 @@ class Game:
 
     def _update_spawn_seq(self, dt: float):
         """Progress through Burwor → Garwor → Thorwor spawn sequence."""
-        alive = [e for e in self.enemies if e.alive and e.etype not in ("worluk","wizard")]
+        alive = [e for e in self.enemies if e.alive and e.etype not in ("worluk","wizard","worlord")]
         if len(alive) > 3:
             return  # still plenty of enemies
 
@@ -253,17 +306,37 @@ class Game:
                     )
                     if br.colliderect(er):
                         b.alive = False
+
+                        # Multi-hit enemies (Worlord)
+                        if hasattr(e, 'HP') and e.HP > 0:
+                            still_alive = e.take_damage(b.damage)
+                            if still_alive:
+                                self.particles.explode(
+                                    int(PLAY_X + e.col * CELL),
+                                    int(PLAY_Y + e.row * CELL),
+                                    (255, 255, 255), 10)
+                                sounds.play("shot_enemy", 0.3)
+                                self._screenshake = 0.15
+                                continue
+
+                        # Enemy killed
                         e.kill()
                         pts = e.points
                         if self.double_score:
                             pts *= 2
                         if owner_p:
                             owner_p.score += pts
+
+                        # Juice effects
+                        self._flash = FLASH_DUR
+                        self._freeze = HIT_FREEZE_DUR
+                        self._freeze_speed = 0.5
                         cx = int(PLAY_X + e.col * CELL)
                         cy = int(PLAY_Y + e.row * CELL)
                         self.particles.explode(cx, cy, e.color, 25)
                         sounds.play("death_enemy", 0.5)
                         self.hud.show_message(f"+{pts}", e.color, 0.8)
+                        self._screenshake = 0.3
 
                         if e.etype == "worluk":
                             self.double_score = True
@@ -272,6 +345,10 @@ class Game:
                         elif e.etype == "wizard":
                             sounds.play("wizard_zap", 0.7)
                             self.hud.show_message("WIZARD SLAIN!", WIZARD_C, 2.5)
+                            self._trigger_dungeon_clear()
+                        elif e.etype == "worlord":
+                            self.hud.show_message("WORLORD VANQUISHED!",
+                                                   WORLORD_COLOR, 3.0)
                             self._trigger_dungeon_clear()
 
                 # Friendly fire (2-player)
@@ -288,6 +365,11 @@ class Game:
                             b.alive = False
                             op.kill()
                             owner_p.score += FRIENDLY_FIRE
+
+                            self._flash = FLASH_DUR
+                            self._freeze = HIT_FREEZE_DUR
+                            self._freeze_speed = 0.5
+
                             self.particles.explode(
                                 int(PLAY_X + op.col * CELL),
                                 int(PLAY_Y + op.row * CELL),
@@ -310,6 +392,11 @@ class Game:
                     if br.colliderect(pr):
                         b.alive = False
                         p.kill()
+
+                        self._flash = FLASH_DUR
+                        self._freeze = HIT_FREEZE_DUR
+                        self._freeze_speed = 0.5
+
                         self.particles.explode(
                             int(PLAY_X + p.col * CELL),
                             int(PLAY_Y + p.row * CELL),
@@ -330,14 +417,26 @@ class Game:
 
     def _check_dungeon_clear(self):
         alive = [e for e in self.enemies if e.alive]
-        if len(alive) == 0 and not self._worluk_spawned:
+        non_special = [e for e in alive if e.etype not in ("worluk","wizard","worlord")]
+
+        if len(non_special) == 0 and not self._worluk_spawned:
             self._spawn_worluk()
-        elif (len(alive) == 1 and
-              alive[0].etype == "worluk" and
-              not self._wizard_spawned and
-              self.dungeon >= 3):
-            # Worluk escaped or was killed — chance to spawn Wizard
-            pass  # handled in collision
+
+        # Worluk escaped through warp
+        worluk_list = [e for e in alive if e.etype == "worluk"]
+        if worluk_list:
+            wl = worluk_list[0]
+            wt = self.maze.is_warp(int(wl.col + 0.5), int(wl.row + 0.5))
+            if wt:
+                wl.kill()
+                self.hud.show_message("WORLUK ESCAPED!", (180, 80, 220), 2.0)
+                self._maybe_spawn_wizard()
+                if not self._wizard_active:
+                    self._trigger_dungeon_clear()
+
+        # All enemies dead and Wizard spawned → dungeon clear
+        if len(alive) == 0 and self._wizard_spawned:
+            self._trigger_dungeon_clear()
 
     def _spawn_worluk(self):
         self._worluk_spawned = True
@@ -364,30 +463,6 @@ class Game:
         sounds.play("dungeon_clear", 0.6)
         self.state = STATE_BETWEEN
         self._between_timer = 2.5
-
-    def _check_dungeon_clear(self):
-        alive = [e for e in self.enemies if e.alive]
-        non_special = [e for e in alive if e.etype not in ("worluk","wizard")]
-
-        if len(non_special) == 0 and not self._worluk_spawned:
-            self._spawn_worluk()
-
-        # Worluk escaped through warp
-        worluk_list = [e for e in alive if e.etype == "worluk"]
-        if worluk_list:
-            wl = worluk_list[0]
-            wt = self.maze.is_warp(int(wl.col + 0.5), int(wl.row + 0.5))
-            if wt:
-                wl.kill()
-                # Worluk escaped — no double score, but maybe spawn Wizard
-                self.hud.show_message("WORLUK ESCAPED!", (180, 80, 220), 2.0)
-                self._maybe_spawn_wizard()
-                if not self._wizard_active:
-                    self._trigger_dungeon_clear()
-
-        # If wizard was spawned but all regular enemies dead and wizard not yet killed
-        if len(alive) == 0 and self._wizard_spawned:
-            self._trigger_dungeon_clear()
 
     def _check_game_over(self):
         all_dead = all(p.lives <= 0 for p in self.players)
@@ -436,6 +511,12 @@ class Game:
             screen.fill(BG)
             self._draw_game(screen)
 
+        # Screen flash overlay
+        if self._flash > 0:
+            flash_surf = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
+            flash_surf.fill((255, 255, 255, int(255 * self._flash / FLASH_DUR)))
+            screen.blit(flash_surf, (0, 0))
+
         if self.state == STATE_GAMEOVER:
             self._draw_gameover(screen)
         elif self.state == STATE_BETWEEN:
@@ -456,7 +537,7 @@ class Game:
                         self.dungeon, self.double_score)
 
         self.hud.draw(surface, self.players, self.dungeon,
-                      self.heartbeat.bpm)
+                      self.heartbeat.bpm, self._get_dungeon_type(self.dungeon))
 
     def _draw_title(self, screen):
         screen.fill(BG)

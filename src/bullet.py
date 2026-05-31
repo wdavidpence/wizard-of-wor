@@ -24,15 +24,25 @@ class Bullet:
         self.speed = BULLET_SPEED   # cells/sec
         self._trail: list = []
 
-    def update(self, dt: float, maze):
+    def update(self, dt: float, maze, particles=None):
         self.col += self.dc * self.speed * dt
         self.row += self.dr * self.speed * dt
 
         ic, ir = int(self.col + 0.5), int(self.row + 0.5)
 
-        # Hit wall
+        # Hit wall — spawn explosion particles!
         if maze.is_wall(ic, ir):
             self.alive = False
+            # ── CRITICAL FIX #2: Explode on wall hit ──
+            if particles is not None:
+                px = PLAY_X + ic * CELL
+                py = PLAY_Y + ir * CELL
+                # Offset slightly towards direction of travel
+                if self.dc > 0:   px += CELL - 8
+                elif self.dc < 0: px += 8
+                if self.dr > 0:   py += CELL - 8
+                elif self.dr < 0: py += 8
+                particles.explode(int(px), int(py), WALL, 8)
             return
 
         # Wrap through warp tunnels
@@ -80,4 +90,6 @@ class Bullet:
     def get_rect(self) -> pygame.Rect:
         cx = int(PLAY_X + self.col * CELL)
         cy = int(PLAY_Y + self.row * CELL)
-        return pygame.Rect(cx - 10, cy - 10, 20, 20)
+        # 28×28 rect to match enemy hitboxes and ensure AABB overlap
+        # at cell-boundary positions (was 20×20, causing gap at edges)
+        return pygame.Rect(cx - 14, cy - 14, 28, 28)
