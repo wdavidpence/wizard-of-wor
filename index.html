@@ -351,13 +351,44 @@ function generateMaze(level) {
 
 class GameScene extends Phaser.Scene {
   constructor(){super('game');}
+  preload(){
+    // === Kenney asset loading ===
+    // Tiles (16x16 PNGs extracted from Kenney Roguelike Dungeon pack)
+    this.load.image('tile_wall','assets/tiles/wall.png');
+    this.load.image('tile_floor','assets/tiles/floor.png');
+    this.load.image('tile_warp','assets/tiles/warp.png');
+    // Player + Wizard (humanoid sprites from Kenney Roguelike Characters pack)
+    this.load.image('spr_player','assets/tiles/player.png');
+    this.load.image('spr_wizard','assets/tiles/wizard.png');
+    // Robot enemies (148x154 top-view PNGs from Kenney Robot Pack)
+    this.load.image('spr_robot_green','assets/enemies/robot_green.png');
+    this.load.image('spr_robot_red','assets/enemies/robot_red.png');
+    this.load.image('spr_robot_blue','assets/enemies/robot_blue.png');
+    this.load.image('spr_robot_yellow','assets/enemies/robot_yellow.png');
+    this.load.image('spr_robot_3Dyellow','assets/enemies/robot_3Dyellow.png');
+    // Explosion frames (Kenney pixel explosion - 9 frames)
+    for(let i=0;i<9;i++){
+      const n=String(i).padStart(2,'0');
+      this.load.image('exp_'+i,'assets/explosions/pixelExplosion'+n+'.png');
+    }
+    // Audio (Kenney Retro Sounds + Sci-Fi packs)
+    this.load.audio('snd_shoot','assets/sounds/shoot.ogg');
+    this.load.audio('snd_explosion','assets/sounds/explosion.ogg');
+    this.load.audio('snd_hurt','assets/sounds/hurt.ogg');
+    this.load.audio('snd_warp','assets/sounds/warp.ogg');
+    this.load.audio('snd_wizard_teleport','assets/sounds/wizard_teleport.ogg');
+    this.load.audio('snd_gameover','assets/sounds/gameover.ogg');
+    this.load.audio('snd_dungeon_clear','assets/sounds/dungeon_clear.ogg');
+    this.load.audio('snd_enemy_appear','assets/sounds/enemy_appear.ogg');
+    this.load.audio('snd_radar','assets/sounds/radar.ogg');
+  }
   create(){
     window._gameScene=this;
     this.cameras.main.setBackgroundColor('#000');
     this.createTextures();
     this.score=0;this.lives=3;this.level=1;this.state='idle';
     this.bullets=[];this.enemyBullets=[];this.player=null;this.enemies=[];
-    this.maze=null;this.mazeGfx=this.add.graphics();this.entityLayer=this.add.container(0,0);this.radarGfx=this.add.graphics();
+    this.maze=null;this.mazeGfx=this.add.graphics();this.mazeTiles=this.add.container(0,0);this.mazeTiles.setDepth(0);this.entityLayer=this.add.container(0,0);this.entityLayer.setDepth(10);this.radarGfx=this.add.graphics();this.radarGfx.setDepth(20);
     this.cursors=this.input.keyboard.createCursorKeys();
     this.spaceKey=this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this.spaceKey.on('down',()=>this.tryFire());
@@ -367,30 +398,56 @@ class GameScene extends Phaser.Scene {
   }
 
   createTextures(){
-    const g=this.make.graphics({x:0,y:0,add:false});
-    function makeCreature(key,body,eye,glow){
-      g.clear();g.fillStyle(glow,0.25);g.fillCircle(20,20,19);
-      g.fillStyle(body,1);g.fillRoundedRect(4,6,32,30,6);g.fillStyle(body,1);
-      g.fillRect(6,34,6,6);g.fillRect(16,34,6,6);g.fillRect(26,34,6,6);
-      g.fillStyle(0xffffff,1);g.fillRect(11,14,7,7);g.fillRect(22,14,7,7);
-      g.fillStyle(eye,1);g.fillRect(13,16,4,4);g.fillRect(24,16,4,4);
-      g.fillStyle(0xffffff,1);g.fillTriangle(14,26,18,26,16,30);g.fillTriangle(22,26,26,26,24,30);
-      g.generateTexture(key,40,40);
+    // === Kenney asset mapping ===
+    // Game logic uses texture keys: burwor/garwor/thorwor/worluk/wizard/player/bullet/ebullet.
+    // We alias those keys to the Kenney sprites already loaded in preload().
+    // Each enemy type maps to a robot color (tint applied at spawn time for variety).
+    // Aliases:
+    //   burwor  -> green robot   (slow, dumb)
+    //   garwor  -> red robot     (fades visible/invisible)
+    //   thorwor -> blue robot    (always invisible)
+    //   worluk  -> yellow robot  (flees)
+    //   wizard  -> human mage    (teleports)
+    //   player  -> human hero
+    const aliases = {
+      'burwor':  'spr_robot_green',
+      'garwor':  'spr_robot_red',
+      'thorwor': 'spr_robot_blue',
+      'worluk':  'spr_robot_yellow',
+      'wizard':  'spr_wizard',
+      'player':  'spr_player',
+    };
+    for(const [alias, src] of Object.entries(aliases)){
+      if(this.textures.exists(src) && !this.textures.exists(alias)){
+        this.textures.addImage(alias, this.textures.get(src).getSourceImage());
+      }
     }
-    makeCreature('burwor',0x22dd33,0xff0000,0x88ff66);
-    makeCreature('garwor',0xdd3322,0xffff00,0xff8866);
-    makeCreature('thorwor',0x3366ff,0xffffff,0x88aaff);
-    makeCreature('worluk',0xff8800,0xffffff,0xffdd66);
-    g.clear();g.fillStyle(0xaa44ff,0.3);g.fillCircle(20,20,19);g.fillStyle(0xaa44ff,1);g.fillTriangle(20,0,6,18,34,18);
-    g.fillStyle(0xffccaa,1);g.fillCircle(20,24,8);g.fillStyle(0x000000,1);g.fillRect(15,22,3,3);g.fillRect(22,22,3,3);
-    g.fillStyle(0xffffff,1);g.fillRect(8,30,24,8);g.fillStyle(0xffea00,1);g.fillCircle(8,20,3);g.fillCircle(32,20,3);
-    g.generateTexture('wizard',40,40);
-    g.clear();g.fillStyle(0xffea00,0.3);g.fillCircle(20,20,19);g.fillStyle(0xffea00,1);g.fillRoundedRect(6,8,28,26,5);
-    g.fillStyle(0x000000,1);g.fillRect(12,14,5,5);g.fillRect(23,14,5,5);g.fillStyle(0xff0000,1);g.fillRect(14,24,12,4);
-    g.fillStyle(0xffea00,1);g.fillRect(8,32,6,6);g.fillRect(26,32,6,6);g.generateTexture('player',40,40);
-    g.clear();g.fillStyle(0xffffff,1);g.fillRect(0,2,12,4);g.fillStyle(0xffea00,1);g.fillRect(2,1,8,6);g.generateTexture('bullet',12,8);
-    g.clear();g.fillStyle(0xff4488,1);g.fillRect(0,2,12,4);g.fillStyle(0xffaaaa,1);g.fillRect(2,1,8,6);g.generateTexture('ebullet',12,8);
+    // Bullets: keep procedural (Kenney pack has no clean bolt) — they're tiny pixel rects.
+    const g=this.make.graphics({x:0,y:0,add:false});
+    if(!this.textures.exists('bullet')){
+      g.clear();g.fillStyle(0xffffff,1);g.fillRect(0,2,12,4);g.fillStyle(0xffea00,1);g.fillRect(2,1,8,6);g.generateTexture('bullet',12,8);
+    }
+    if(!this.textures.exists('ebullet')){
+      g.clear();g.fillStyle(0xff4488,1);g.fillRect(0,2,12,4);g.fillStyle(0xffaaaa,1);g.fillRect(2,1,8,6);g.generateTexture('ebullet',12,8);
+    }
     g.destroy();
+
+    // === Kenney sound helpers ===
+    // Wrap Phaser's sound manager with a uniform play() helper that:
+    //  - silently ignores missing keys (so we never crash if a sound failed to load)
+    //  - caps simultaneous voices at 3 per key (prevents iOS audio glitching)
+    //  - honors a master "muted" toggle for future settings UI
+    this.kenneySounds = {};
+    const SOUND_KEYS=['snd_shoot','snd_explosion','snd_hurt','snd_warp',
+      'snd_wizard_teleport','snd_gameover','snd_dungeon_clear',
+      'snd_enemy_appear','snd_radar'];
+    SOUND_KEYS.forEach(k=>{
+      if(this.cache.audio.exists(k)) this.kenneySounds[k]=this.sound.add(k,{volume:0.5});
+    });
+    this.playK = (key, opts={}) => {
+      const s=this.kenneySounds[key]; if(!s) return;
+      try{ s.play(opts); }catch(e){}
+    };
   }
 
   updateHUD(){document.getElementById('score').textContent=this.score;document.getElementById('lives').textContent=this.lives;document.getElementById('level').textContent=this.level;}
@@ -425,11 +482,60 @@ class GameScene extends Phaser.Scene {
     // than instantly escaping when spawn lands next to a warp tunnel.
     const fleeRight = type==='worluk' ? (x < MAZE_W/2) : false;
     const e=this.spawnEntity(type,x,y,{type,alive:true,dir:Phaser.Math.RND.pick([DIR.LEFT,DIR.RIGHT,DIR.UP,DIR.DOWN]),speed:cfg.speed,points:cfg.points,fades:cfg.fades||false,invisible:cfg.invisible||false,flees:cfg.flees||false,teleports:cfg.teleports||false,fireTimer:Phaser.Math.Between(2000,6000),teleportTimer:type==='wizard'?Phaser.Math.Between(3000,5000):0,escapeTimer:type==='worluk'?1200:0,fleeRight:fleeRight});
-    if(type==='worluk'){e.dir=fleeRight?DIR.RIGHT:DIR.LEFT;playWorlukSound();}
+    // Tag robot enemies as "top view" so moveEntity rotates them to face dir.
+    // Wizard uses a humanoid sprite — keep it flip-X based (not rotated).
+    e._isTopView = (type==='burwor' || type==='garwor' || type==='thorwor' || type==='worluk');
+    // Glow halo behind enemy so they stand out against the busy tile floor.
+    // Color matches the enemy's brand color (used in HUD legend & radar).
+    const haloColors={burwor:0x22dd33,garwor:0xdd3322,thorwor:0x3366ff,worluk:0xff8800,wizard:0xaa44ff};
+    const halo=this.add.circle(x,y,CELL*0.45,haloColors[type]||0xffffff,0.22);
+    this.entityLayer.add(halo);
+    halo.setDepth(e.depth-1);
+    e._halo=halo;
+    if(type==='worluk'){e.dir=fleeRight?DIR.RIGHT:DIR.LEFT;playWorlukSound();this.playK('snd_warp');}
+    if(type==='wizard'){this.playK('snd_wizard_teleport');}
     if(cfg.invisible)e.setAlpha(0);else if(cfg.fades)e.setAlpha(cfg.visible);this.enemies.push(e);return e;
   }
   clearAll(){this.entityLayer.removeAll(true);this.bullets=[];this.enemyBullets=[];this.enemies=[];this.player=null;}
-  drawMaze(){const g=this.mazeGfx;g.clear();g.fillStyle(0x000010,1);g.fillRect(0,0,MAZE_W,MAZE_H);for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++)if(this.maze[r][c]){const x=c*CELL,y=r*CELL;g.fillStyle(0x4444ff,1);g.fillRect(x+2,y+2,CELL-4,CELL-4);g.fillStyle(0x6666ff,1);g.fillRect(x+4,y+4,CELL-8,CELL-8);g.fillStyle(0x2222aa,1);g.fillRect(x+6,y+6,CELL-12,CELL-12);}g.fillStyle(0xff00ff,0.4);[(ROWS/2-1)|0,(ROWS/2)|0].forEach(r=>{g.fillRect(0,r*CELL+10,4,CELL-20);g.fillRect(MAZE_W-4,r*CELL+10,4,CELL-20);});}
+  drawMaze(){
+    // Tile-based rendering using Kenney Roguelike Dungeon tiles (16x16 source,
+    // scaled to CELL=48 → 3x). We rebuild a Container of Image sprites every
+    // level. Each maze cell is a floor tile; walls overlay on top.
+    if(!this.mazeTiles) this.mazeTiles=this.add.container(0,0);
+    this.mazeTiles.removeAll(true);
+    this.mazeTiles.setDepth(0);
+    const TILE_SCALE = CELL/16;
+    for(let r=0;r<ROWS;r++){
+      for(let c=0;c<COLS;c++){
+        const x=c*CELL+CELL/2, y=r*CELL+CELL/2;
+        // Floor underlay everywhere
+        if(this.textures.exists('tile_floor')){
+          const f=this.add.image(x,y,'tile_floor');
+          f.setScale(TILE_SCALE).setTint(0x6688cc);
+          this.mazeTiles.add(f);
+        }
+        // Wall overlay if this cell is solid
+        if(this.maze[r][c]===1 && this.textures.exists('tile_wall')){
+          const w=this.add.image(x,y,'tile_wall');
+          w.setScale(TILE_SCALE).setTint(0x9988ff);
+          this.mazeTiles.add(w);
+        }
+      }
+    }
+    // Warp indicators on left/right edges at the two mid rows
+    const midRows=[(ROWS/2-1)|0,(ROWS/2)|0];
+    if(this.textures.exists('tile_warp')){
+      midRows.forEach(r=>{
+        [0,COLS-1].forEach(c=>{
+          const w=this.add.image(c*CELL+CELL/2, r*CELL+CELL/2, 'tile_warp');
+          w.setScale(TILE_SCALE).setTint(0xff66ff).setAlpha(0.7);
+          this.mazeTiles.add(w);
+        });
+      });
+    }
+    // Keep the procedural mazeGfx around for backward compat but clear it.
+    this.mazeGfx.clear();
+  }
   isWall(c,r){if(r<0||r>=ROWS)return true;if(c<0||c>=COLS)return false;return this.maze[r][c]===1;}
   // Find nearest open (non-wall) cell to (c,r) using BFS. Returns {c,r} or null.
   // Used by all spawn paths so an enemy NEVER materializes inside a wall.
@@ -498,7 +604,20 @@ class GameScene extends Phaser.Scene {
     e.x+=DVEC[e.dir].x*move;e.y+=DVEC[e.dir].y*move;
     if(e.x<-CELL/2)e.x=MAZE_W+CELL/2;if(e.x>MAZE_W+CELL/2)e.x=-CELL/2;
     e.gridCol=Math.floor(e.x/CELL);e.gridRow=Math.floor(e.y/CELL);if(e.gridRow<0)e.gridRow=0;if(e.gridRow>ROWS-1)e.gridRow=ROWS-1;
-    if(e.dir===DIR.LEFT)e.setFlipX(true);if(e.dir===DIR.RIGHT)e.setFlipX(false);
+    // Rotate top-view sprites to face direction of travel. Kenney robot top-view
+    // PNGs are drawn facing UP (north), so angle 0 = up.
+    // Player & wizard sprites are side-view humans — keep them upright and flip X.
+    if(e._isTopView){
+      if(e.dir===DIR.UP)    e.angle = 0;
+      else if(e.dir===DIR.RIGHT) e.angle = 90;
+      else if(e.dir===DIR.DOWN)  e.angle = 180;
+      else if(e.dir===DIR.LEFT)  e.angle = 270;
+    } else {
+      if(e.dir===DIR.LEFT)e.setFlipX(true);
+      if(e.dir===DIR.RIGHT)e.setFlipX(false);
+    }
+    // Keep glow halo locked to the entity position.
+    if(e._halo){ e._halo.x=e.x; e._halo.y=e.y; e._halo.setAlpha(0.18 + 0.10*Math.sin(performance.now()/250)); }
   }
 
   updateEnemyAI(e,dt,time){
@@ -520,8 +639,8 @@ class GameScene extends Phaser.Scene {
         if(opts.length)e.dir=opts[0];
         // Only count escape after the grace window expires.
         if(e.escapeTimer<=0 && (e.x<0||e.x>MAZE_W)){
-          this.score+=e.points; this.updateHUD(); playWorlukSound();
-          e.alive=false; e.destroy(); return;
+          this.score+=e.points; this.updateHUD(); playWorlukSound(); this.playK('snd_warp');
+          e.alive=false; if(e._halo){e._halo.destroy();e._halo=null;} e.destroy(); return;
         }
       }
       return;
@@ -538,26 +657,68 @@ class GameScene extends Phaser.Scene {
     const d=dirOverride||(this.player.dir===DIR.NONE?(this.player.queuedDir||DIR.RIGHT):this.player.dir);
     const vec=DVEC[d];if(!vec||vec.x===0&&vec.y===0)return;
     const b=this.add.image(this.player.x+vec.x*16,this.player.y+vec.y*16,'bullet');
-    b.vx=vec.x*400;b.vy=vec.y*400;if(vec.y!==0)b.angle=90;this.entityLayer.add(b);this.bullets.push(b);playShootSound();
+    b.vx=vec.x*400;b.vy=vec.y*400;if(vec.y!==0)b.angle=90;this.entityLayer.add(b);this.bullets.push(b);
+    // Prefer Kenney laser; fallback to synth chirp
+    if(this.kenneySounds && this.kenneySounds.snd_shoot) this.playK('snd_shoot');
+    else playShootSound();
   }
 
   spawnEnemyBullet(e){const vec=DVEC[e.dir];if(vec.x===0&&vec.y===0)return;const b=this.add.image(e.x+vec.x*16,e.y+vec.y*16,'ebullet');b.vx=vec.x*260;b.vy=vec.y*260;if(vec.y!==0)b.angle=90;this.entityLayer.add(b);this.enemyBullets.push(b);playEnemyShootSound();}
 
   handleBulletCollisions(){
     for(let i=this.bullets.length-1;i>=0;i--){const b=this.bullets[i];let hit=false;
-      for(const e of this.enemies){if(!e.alive)continue;if(Phaser.Math.Distance.Between(b.x,b.y,e.x,e.y)<22){this.score+=e.points;this.updateHUD();this.explodeAt(e.x,e.y);e.alive=false;e.destroy();hit=true;break;}}
+      for(const e of this.enemies){if(!e.alive)continue;if(Phaser.Math.Distance.Between(b.x,b.y,e.x,e.y)<22){this.score+=e.points;this.updateHUD();this.explodeAt(e.x,e.y);e.alive=false;if(e._halo){e._halo.destroy();e._halo=null;}e.destroy();hit=true;break;}}
       if(!hit)for(let j=this.enemyBullets.length-1;j>=0;j--){const eb=this.enemyBullets[j];if(Phaser.Math.Distance.Between(b.x,b.y,eb.x,eb.y)<12){eb.destroy();this.enemyBullets.splice(j,1);hit=true;break;}}
       if(hit){b.destroy();this.bullets.splice(i,1);}
     }
   }
 
-  explodeAt(x,y){playExplosionSound();const flash=this.add.circle(x,y,12,0xffffaa);this.entityLayer.add(flash);this.tweens.add({targets:flash,scale:3.5,alpha:0,duration:380,onComplete:()=>flash.destroy()});
-    for(let i=0;i<14;i++){const p=this.add.circle(x,y,Phaser.Math.Between(2,5),Phaser.Math.RND.pick([0xffaa00,0xff6600,0xffdd44,0xffffff]));this.entityLayer.add(p);const ang=(i/14)*Math.PI*2+Phaser.Math.FloatBetween(-0.4,0.4);const spd=Phaser.Math.Between(80,180);const vx=Math.cos(ang)*spd,vy=Math.sin(ang)*spd;this.tweens.add({targets:p,x:x+vx*0.6,y:y+vy*0.6,alpha:0,scale:0.2,duration:Phaser.Math.Between(420,720),onComplete:()=>p.destroy()});}
+  explodeAt(x,y){
+    // Kenney pixel explosion: 9 frames played back over ~450ms.
+    // We still draw a flash + particle ring on top of the spritesheet for
+    // extra punch — the Kenney explosion is large but visually subtle.
+    this.playK('snd_explosion');
+    // Fallback synth (in case Kenney audio failed to load)
+    if(!this.kenneySounds || !this.kenneySounds.snd_explosion) playExplosionSound();
+
+    // Animated explosion frames
+    if(this.textures.exists('exp_0')){
+      const sprite=this.add.image(x,y,'exp_0').setDepth(50);
+      sprite.setScale(0.7);
+      this.entityLayer.add(sprite);
+      let frame=0;
+      const total=9;
+      const interval=this.time.addEvent({
+        delay:50,
+        repeat:total-1,
+        callback:()=>{
+          frame++;
+          if(frame<total && this.textures.exists('exp_'+frame)){
+            sprite.setTexture('exp_'+frame);
+          }
+        }
+      });
+      this.tweens.add({targets:sprite,alpha:{from:1,to:0},scale:1.2,duration:total*50,onComplete:()=>{sprite.destroy();interval.remove();}});
+    } else {
+      // Fallback: original procedural flash
+      const flash=this.add.circle(x,y,12,0xffffaa);
+      this.entityLayer.add(flash);
+      this.tweens.add({targets:flash,scale:3.5,alpha:0,duration:380,onComplete:()=>flash.destroy()});
+    }
+    // Particle burst (always on top)
+    for(let i=0;i<14;i++){
+      const p=this.add.circle(x,y,Phaser.Math.Between(2,5),Phaser.Math.RND.pick([0xffaa00,0xff6600,0xffdd44,0xffffff]));
+      this.entityLayer.add(p);
+      const ang=(i/14)*Math.PI*2+Phaser.Math.FloatBetween(-0.4,0.4);
+      const spd=Phaser.Math.Between(80,180);
+      const vx=Math.cos(ang)*spd,vy=Math.sin(ang)*spd;
+      this.tweens.add({targets:p,x:x+vx*0.6,y:y+vy*0.6,alpha:0,scale:0.2,duration:Phaser.Math.Between(420,720),onComplete:()=>p.destroy()});
+    }
   }
 
-  killPlayer(){if(this.state!=='playing')return;this.state='dying';this.explodeAt(this.player.x,this.player.y);this.player.alive=false;this.player.setVisible(false);this.lives--;this.updateHUD();this.time.delayedCall(900,()=>{if(this.lives<0)this.gameOver();else{const safe=this.findOpenCell((COLS/2)|0,ROWS-3)||{c:1,r:(ROWS/2)|0};const px=safe.c*CELL+CELL/2,py=safe.r*CELL+CELL/2;this.player.x=px;this.player.y=py;this.player.gridCol=safe.c;this.player.gridRow=safe.r;this.player.dir=DIR.NONE;this.player.queuedDir=DIR.NONE;this.queuedDir=DIR.NONE;this.player.setVisible(true);this.player.alive=true;this.state='playing';}});}
-  nextLevel(){if(this.state!=='playing')return;this.state='levelEnd';this.level++;this.updateHUD();this.time.delayedCall(800,()=>this.startLevel());}
-  gameOver(){this.state='gameover';document.getElementById('finalScore').textContent='SCORE: '+this.score;document.getElementById('gameOverScreen').classList.remove('hidden');}
+  killPlayer(){if(this.state!=='playing')return;this.state='dying';this.explodeAt(this.player.x,this.player.y);this.playK('snd_hurt');this.player.alive=false;this.player.setVisible(false);this.lives--;this.updateHUD();this.time.delayedCall(900,()=>{if(this.lives<0)this.gameOver();else{const safe=this.findOpenCell((COLS/2)|0,ROWS-3)||{c:1,r:(ROWS/2)|0};const px=safe.c*CELL+CELL/2,py=safe.r*CELL+CELL/2;this.player.x=px;this.player.y=py;this.player.gridCol=safe.c;this.player.gridRow=safe.r;this.player.dir=DIR.NONE;this.player.queuedDir=DIR.NONE;this.queuedDir=DIR.NONE;this.player.setVisible(true);this.player.alive=true;this.state='playing';}});}
+  nextLevel(){if(this.state!=='playing')return;this.state='levelEnd';this.playK('snd_dungeon_clear');this.level++;this.updateHUD();this.time.delayedCall(800,()=>this.startLevel());}
+  gameOver(){this.state='gameover';this.playK('snd_gameover');document.getElementById('finalScore').textContent='SCORE: '+this.score;document.getElementById('gameOverScreen').classList.remove('hidden');}
 }
 
 const config={type:Phaser.AUTO,parent:'phaserWrap',width:GAME_W,height:GAME_H,backgroundColor:'#000',scale:{mode:Phaser.Scale.FIT,autoCenter:Phaser.Scale.CENTER_BOTH},scene:[GameScene]};
@@ -857,6 +1018,12 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('startBtn').addEventListener('touchend',e=>{e.preventDefault();startBegin();});
   document.getElementById('restartBtn').addEventListener('click',()=>{document.getElementById('gameOverScreen').classList.add('hidden');if(window._gameScene&&window._gameScene._begin)window._gameScene._begin();});
   document.getElementById('restartBtn').addEventListener('touchend',e=>{e.preventDefault();document.getElementById('gameOverScreen').classList.add('hidden');if(window._gameScene&&window._gameScene._begin)window._gameScene._begin();});
+
+  // Auto-start hook (used by headless E2E tests / asset previews).
+  // Add ?auto=1 to the URL to skip the splash screen.
+  if(new URLSearchParams(location.search).get('auto')==='1'){
+    setTimeout(startBegin, 1500);
+  }
 });
 </script>
 </body>
