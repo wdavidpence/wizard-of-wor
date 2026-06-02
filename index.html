@@ -143,11 +143,12 @@
     <h1>WIZARD<br>OF WOR</h1>
     <div id="highScoreDisplay" style="font-size:10px; color:#ffea00; margin-top:-10px;">HIGH SCORE: 0</div>
     <div class="legend">
-      <div><span style="background:#22dd33"></span>BURWOR — 100 pts</div>
-      <div><span style="background:#dd3322"></span>GARWOR — 200 pts (fades)</div>
-      <div><span style="background:#3366ff"></span>THORWOR — 500 pts (invisible)</div>
-      <div><span style="background:#ff8800"></span>WORLUK — 1000 pts (escapes)</div>
-      <div><span style="background:#aa44ff"></span>WIZARD — 2500 pts (teleports)</div>
+      <div style="color:#00ffff; font-size:10px; margin-bottom:8px; text-align:center;">PLAYER 1 (BLUE) vs SPACE MAZE</div>
+      <div><span style="background:#22dd33"></span>BURWOR — 100 pts (Green)</div>
+      <div><span style="background:#ffee00"></span>GARWOR — 200 pts (Yellow - fades)</div>
+      <div><span style="background:#0088ff"></span>THORWOR — 500 pts (Blue - invisible)</div>
+      <div><span style="background:#ffee00"></span>WORLUK — 1000 pts (Yellow - escapes)</div>
+      <div><span style="background:#0088ff"></span>WIZARD — 2500 pts (Blue - teleports)</div>
     </div>
     <p>Watch the RADAR for invisible enemies!<br>Use the WARP tunnels on the sides.</p>
     <button class="btn" id="startBtn">START</button>
@@ -176,6 +177,26 @@ const DVEC = {
 };
 
 let audioCtx;
+
+// Robotic Speech Synth helper using native Web Speech Synthesis (Fully iOS/Safari compatible!)
+function speakRobotic(text) {
+  if (!window.speechSynthesis) return;
+  try {
+    window.speechSynthesis.cancel(); // Stop any current speech
+    const utterance = new SpeechSynthesisUtterance(text);
+    // Find a retro male or distinct voice
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length > 0) {
+      // Prefer Google US English or standard English male voice
+      const preferred = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Male') || v.name.includes('Google')));
+      if (preferred) utterance.voice = preferred;
+    }
+    utterance.pitch = 0.45; // Low-pitched, robotic, ominous arcade voice
+    utterance.rate = 0.82;  // Slightly slower pacing
+    utterance.volume = 0.85;
+    window.speechSynthesis.speak(utterance);
+  } catch (e) {}
+}
 function getAudio() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   // iOS Safari suspends AudioContext until a user gesture — call resume()
@@ -507,6 +528,7 @@ class GameScene extends Phaser.Scene {
     document.getElementById('gameOverScreen').classList.add('hidden');
     this.score=0;this.lives=3;this.level=1;
     this.updateHUD();
+    speakRobotic("WARRIOR! PREPARE FOR BATTLE!");
     this.startLevel();
   }
   startLevel(){
@@ -533,24 +555,36 @@ class GameScene extends Phaser.Scene {
   spawnEntity(key,x,y,props){const img=this.add.image(x,y,key);img.setDisplaySize(CELL-6,CELL-6);Object.assign(img,props);img.gridCol=Math.floor(x/CELL);img.gridRow=Math.floor(y/CELL);img.moveCooldown=0;this.entityLayer.add(img);return img;}
   spawnEnemy(type,x,y){
     const cfg={burwor:{speed:55,visible:1,points:100},garwor:{speed:75,visible:0.6,points:200,fades:true},thorwor:{speed:95,visible:0,points:500,invisible:true},worluk:{speed:140,visible:1,points:1000,flees:true},wizard:{speed:90,visible:1,points:2500,teleports:true}}[type];
-    // Worluk fix: ESCAPE_GRACE = 1.2s window where escape doesn't count,
-    // and fleeDir aims at the FARTHER warp so the bonus is winnable rather
-    // than instantly escaping when spawn lands next to a warp tunnel.
     const fleeRight = type==='worluk' ? (x < MAZE_W/2) : false;
     const e=this.spawnEntity(type,x,y,{type,alive:true,dir:Phaser.Math.RND.pick([DIR.LEFT,DIR.RIGHT,DIR.UP,DIR.DOWN]),speed:cfg.speed,points:cfg.points,fades:cfg.fades||false,invisible:cfg.invisible||false,flees:cfg.flees||false,teleports:cfg.teleports||false,fireTimer:Phaser.Math.Between(2000,6000),teleportTimer:type==='wizard'?Phaser.Math.Between(3000,5000):0,escapeTimer:type==='worluk'?1200:0,fleeRight:fleeRight});
-    // Tag robot enemies as "top view" so moveEntity rotates them to face dir.
-    // Wizard uses a humanoid sprite — keep it flip-X based (not rotated).
     e._isTopView = (type==='burwor' || type==='garwor' || type==='thorwor' || type==='worluk');
-    // Glow halo behind enemy so they stand out against the busy tile floor.
-    // Color matches the enemy's brand color (used in HUD legend & radar).
-    const haloColors={burwor:0x22dd33,garwor:0xdd3322,thorwor:0x3366ff,worluk:0xff8800,wizard:0xaa44ff};
-    const halo=this.add.circle(x,y,CELL*0.45,haloColors[type]||0xffffff,0.22);
+    
+    // ARCADE ACCURATE PLAYER & ENEMY COLOR SCHEME (TINTS)
+    const arcadeColors={
+      burwor:  0x22dd33, // Green
+      garwor:  0xffee00, // Yellow
+      thorwor: 0x0088ff, // Blue
+      worluk:  0xffee00, // Yellow
+      wizard:  0x0088ff, // Blue
+    };
+    e.setTint(arcadeColors[type]||0xffffff);
+
+    // Glow halo matching arcade colors
+    const halo=this.add.circle(x,y,CELL*0.45,arcadeColors[type]||0xffffff,0.22);
     this.entityLayer.add(halo);
     halo.setDepth(e.depth-1);
     e._halo=halo;
+
     if(type==='worluk'){e.dir=fleeRight?DIR.RIGHT:DIR.LEFT;playWorlukSound();this.playK('snd_warp');}
-    if(type==='wizard'){this.playK('snd_wizard_teleport');}
-    if(cfg.invisible)e.setAlpha(0);else if(cfg.fades)e.setAlpha(cfg.visible);this.enemies.push(e);return e;
+    if(type==='wizard'){
+      speakRobotic("AH! THE WIZARD OF WOR!");
+      this.playK('snd_wizard_teleport');
+    }
+    
+    // Thorwors are fully invisible in the maze (only visible on radar)
+    if(cfg.invisible) e.setAlpha(0);
+    else if(cfg.fades) e.setAlpha(cfg.visible);
+    this.enemies.push(e);return e;
   }
   clearAll(){this.entityLayer.removeAll(true);this.bullets=[];this.enemyBullets=[];this.enemies=[];this.player=null;}
   drawMaze(){
@@ -741,7 +775,7 @@ class GameScene extends Phaser.Scene {
     const midRows=[(ROWS/2-1)|0,(ROWS/2)|0];
     midRows.forEach(r=>{g.fillStyle(0xff00ff,0.3);g.fillRect(ix,iy+r*(ih/ROWS),iw,ih/ROWS);});
     if(this.player&&this.player.alive){g.fillStyle(0xffea00,1);g.fillRect(ix+this.player.x*sx-3,iy+this.player.y*sy-3,6,6);}
-    this.enemies.forEach(e=>{if(!e.alive)return;const cm={burwor:0x22dd33,garwor:0xdd3322,thorwor:0x3366ff,worluk:0xff8800,wizard:0xaa44ff};g.fillStyle(cm[e.type]||0xffffff,1);g.fillRect(ix+e.x*sx-2,iy+e.y*sy-2,5,5);});
+    this.enemies.forEach(e=>{if(!e.alive)return;const cm={burwor:0x22dd33,garwor:0xffee00,thorwor:0x0088ff,worluk:0xffee00,wizard:0x0088ff};g.fillStyle(cm[e.type]||0xffffff,1);g.fillRect(ix+e.x*sx-2,iy+e.y*sy-2,5,5);});
     
     // Dynamic radar scanning sweep line
     this.radarSweepAngle = (this.radarSweepAngle || 0) + 0.04;
@@ -772,7 +806,18 @@ class GameScene extends Phaser.Scene {
 
   handleBulletCollisions(){
     for(let i=this.bullets.length-1;i>=0;i--){const b=this.bullets[i];let hit=false;
-      for(const e of this.enemies){if(!e.alive)continue;if(Phaser.Math.Distance.Between(b.x,b.y,e.x,e.y)<22){this.score+=e.points;this.updateHUD();this.explodeAt(e.x,e.y,e.points);e.alive=false;if(e._halo){e._halo.destroy();e._halo=null;}e.destroy();hit=true;break;}}
+      for(const e of this.enemies){if(!e.alive)continue;if(Phaser.Math.Distance.Between(b.x,b.y,e.x,e.y)<22){// Worluk Double Score logic (Even levels have active Worluk double-score bonus)
+      const isWorlukLevel = this.worlukSpawned && !this.wizardSpawned;
+      const pointsAwarded = (isWorlukLevel && e.type === 'worluk') ? (e.points * 2) : e.points;
+      this.score += pointsAwarded;
+      this.updateHUD();
+      this.explodeAt(e.x,e.y,pointsAwarded);
+      if(isWorlukLevel && e.type === 'worluk') {
+        const doubleTxt = this.add.text(MAZE_W/2, MAZE_H/2 - 50, 'DOUBLE SCORE BONUS!', {
+          fontFamily: '"Press Start 2P"', fontSize: '18px', color: '#ffea00'
+        }).setOrigin(0.5).setDepth(200);
+        this.tweens.add({ targets: doubleTxt, scale: 1.4, alpha: 0, duration: 1500, onComplete: () => doubleTxt.destroy() });
+      }e.alive=false;if(e._halo){e._halo.destroy();e._halo=null;}e.destroy();hit=true;break;}}
       if(!hit)for(let j=this.enemyBullets.length-1;j>=0;j--){const eb=this.enemyBullets[j];if(Phaser.Math.Distance.Between(b.x,b.y,eb.x,eb.y)<12){eb.destroy();this.enemyBullets.splice(j,1);hit=true;break;}}
       if(hit){b.destroy();this.bullets.splice(i,1);}
     }
