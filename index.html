@@ -8,167 +8,61 @@
 <title>Wizard of Wor</title>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  html, body {
-    width:100%; height:100%; background:#000; overflow:hidden;
-    touch-action:none; -webkit-user-select:none; user-select:none;
-    -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent;
-    font-family:'Press Start 2P', monospace; color:#fff;
-  }
-  #gameContainer { position:fixed; inset:0; width:100vw; height:100vh; overflow:hidden; }
-  #phaserWrap { width:100%; height:100%; position:relative; z-index:1; }
-  #phaserWrap canvas {
-    position:fixed !important; top:0; left:0;
-    width:100vw !important; height:100vh !important;
-    z-index:0 !important; pointer-events:none !important;
-  }
-  #gameInputLayer { position:absolute; inset:0; z-index:2; pointer-events:auto; }
-
-  #hud {
-    position:absolute; top:0; left:0; right:0; height:42px;
-    display:flex; justify-content:space-between; align-items:center;
-    padding:0 12px; z-index:5; pointer-events:none;
-    background:linear-gradient(to bottom, rgba(0,0,0,0.85), rgba(0,0,0,0));
-    font-size:11px; color:#ffea00; text-shadow:1px 1px 0 #000;
-  }
-  #hud .stat { padding:0 6px; }
-  #hud .stat .v { color:#fff; }
-
-  .overlay {
-    position:absolute; inset:0; z-index:10;
-    display:flex; flex-direction:column; align-items:center; justify-content:center;
-    background:rgba(0,0,0,0.85); padding:20px; text-align:center; gap:18px;
-  }
-  .overlay h1 {
-    font-size:24px; color:#ff3366; text-shadow:2px 2px 0 #000, 0 0 16px #ff0044;
-    line-height:1.4;
-  }
-  .overlay h2 { font-size:16px; color:#ffea00; text-shadow:2px 2px 0 #000; }
-  .overlay p { font-size:9px; line-height:1.7; color:#aaffcc; max-width:340px; }
-  .overlay .legend { font-size:8px; line-height:1.8; color:#fff; text-align:left; }
-  .overlay .legend span { display:inline-block; width:10px; height:10px; margin-right:6px; vertical-align:middle; border:1px solid #fff; }
-
-  .btn {
-    background:#222; color:#0ff; border:2px solid #0ff;
-    padding:14px 24px; font-family:inherit; font-size:12px;
-    cursor:pointer; pointer-events:auto;
-    text-shadow:1px 1px 0 #000; box-shadow:0 0 12px #0ff;
-  }
-  .btn:active { background:#0ff; color:#000; }
-  .hidden { display:none !important; }
-
-  /* === DUAL D-PADS === */
-  #controls {
-    position:absolute; bottom:0; left:0; right:0;
-    height:160px; z-index:6; pointer-events:none;
-    display:flex; justify-content:space-between; align-items:flex-end;
-    padding:12px 18px 22px;
-  }
-
-  /* Movement D-pad (left) */
-  #movePad {
-    position:relative; width:132px; height:132px;
-    pointer-events:auto; opacity:0.38;
-  }
-  .move-btn {
-    position:absolute; width:40px; height:40px;
-    background:rgba(0,255,255,0.22); border:2px solid #0ff;
-    border-radius:8px; display:flex; align-items:center; justify-content:center;
-    font-size:20px; color:#0ff; user-select:none; touch-action:none;
-    box-shadow:0 0 8px rgba(0,255,255,0.5);
-  }
-  .move-btn:active, .move-btn.held { background:rgba(0,255,255,0.55); color:#000; }
-  #move-up    { top:0;   left:46px; }
-  #move-down  { bottom:0; left:46px; }
-  #move-left  { top:46px; left:0; }
-  #move-right { top:46px; right:0; }
-  #move-stop  {
-    top:46px; left:46px; width:40px; height:40px;
-    background:rgba(255,255,255,0.15); border:2px solid #888;
-    font-size:13px; color:#aaa; border-radius:50%;
-  }
-  #move-stop:active, #move-stop.held { background:rgba(200,200,200,0.4); color:#fff; }
-
-  /* Firing D-pad (right) - red tint */
-  #firePad {
-    position:relative; width:132px; height:132px;
-    pointer-events:auto; opacity:0.42;
-  }
-  .fire-btn {
-    position:absolute; width:40px; height:40px;
-    background:rgba(255,60,60,0.25); border:2px solid #ff4444;
-    border-radius:8px; display:flex; align-items:center; justify-content:center;
-    font-size:20px; color:#ff6666; user-select:none; touch-action:none;
-    box-shadow:0 0 10px rgba(255,60,60,0.6);
-  }
-  .fire-btn:active, .fire-btn.held { background:rgba(255,60,60,0.65); color:#fff; }
-  #fire-up    { top:0;   left:46px; }
-  #fire-down  { bottom:0; left:46px; }
-  #fire-left  { top:46px; left:0; }
-  #fire-right { top:46px; right:0; }
+* { margin:0; padding:0; box-sizing:box-border; }
+html, body { width:100%; height:100%; background:#000; overflow:hidden; touch-action:none; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; font-family:'Press Start 2P',monospace; color:#fff; }
+#gameContainer { position:fixed; inset:0; width:100vw; height:100vh; overflow:hidden; }
+#phaserWrap { width:100%; height:100%; position:relative; z-index:1; }
+#phaserWrap canvas { display:block; image-rendering:pixelated; image-rendering:crisp-edges; }
+.overlay { position:fixed; inset:0; z-index:1000; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.92); }
+.overlay.hidden { display:none; }
+#startScreen { flex-direction:column; gap:20px; }
+#startScreen h1 { color:#ff00ff; font-size:28px; text-shadow:0 0 20px #ff00ff,0 0 40px #ff00ff; margin-bottom:10px; }
+#startScreen .subtitle { color:#00ff88; font-size:10px; margin-bottom:20px; }
+#startScreen .instructions { color:#aaa; font-size:8px; line-height:2; text-align:center; max-width:320px; }
+#startScreen .start-btn { background:#ff00ff; color:#fff; border:none; padding:15px 40px; font-family:'Press Start 2P',monospace; font-size:14px; cursor:pointer; margin-top:20px; }
+#startScreen .start-btn:active { background:#cc00cc; }
+#gameOverScreen { flex-direction:column; gap:15px; }
+#gameOverScreen h1 { color:#ff0000; font-size:24px; }
+#gameOverScreen .final-score { color:#ffea00; font-size:16px; }
+#gameOverScreen .final-level { color:#00ff88; font-size:12px; }
+#gameOverScreen .restart-btn { background:#ff0000; color:#fff; border:none; padding:12px 30px; font-family:'Press Start 2P',monospace; font-size:12px; cursor:pointer; margin-top:15px; }
+#gameOverScreen .restart-btn:active { background:#cc0000; }
 </style>
 </head>
 <body>
 <div id="gameContainer">
   <div id="phaserWrap"></div>
-  <div id="gameInputLayer"></div>
-
-  <div id="hud">
-    <div class="stat">SCORE <span class="v" id="score">0</span></div>
-    <div class="stat">DUNGEON <span class="v" id="level">1</span></div>
-    <div class="stat">LIVES <span class="v" id="lives">3</span></div>
-  </div>
-
-  <!-- DUAL D-PADS -->
-  <div id="controls">
-    <!-- Movement D-pad + STOP -->
-    <div id="movePad">
-      <div id="move-up"    class="move-btn">▲</div>
-      <div id="move-down"  class="move-btn">▼</div>
-      <div id="move-left"  class="move-btn">◀</div>
-      <div id="move-right" class="move-btn">▶</div>
-      <div id="move-stop"  class="move-btn">■</div>
-    </div>
-
-    <!-- Firing D-pad (independent aim) -->
-    <div id="firePad">
-      <div id="fire-up"    class="fire-btn">▲</div>
-      <div id="fire-down"  class="fire-btn">▼</div>
-      <div id="fire-left"  class="fire-btn">◀</div>
-      <div id="fire-right" class="fire-btn">▶</div>
-    </div>
-  </div>
-
   <div id="startScreen" class="overlay">
-    <h1>WIZARD<br>OF WOR</h1>
-    <div id="highScoreDisplay" style="font-size:10px; color:#ffea00; margin-top:-10px;">HIGH SCORE: 0</div>
-    <div class="legend">
-      <div style="color:#00ffff; font-size:10px; margin-bottom:8px; text-align:center;">PLAYER 1 (BLUE) vs SPACE MAZE</div>
-      <div><span style="background:#22dd33"></span>BURWOR — 100 pts (Green)</div>
-      <div><span style="background:#ffee00"></span>GARWOR — 200 pts (Yellow - fades)</div>
-      <div><span style="background:#0088ff"></span>THORWOR — 500 pts (Blue - invisible)</div>
-      <div><span style="background:#ffee00"></span>WORLUK — 1000 pts (Yellow - escapes)</div>
-      <div><span style="background:#0088ff"></span>WIZARD — 2500 pts (Blue - teleports)</div>
+    <h1>WIZARD OF WOR</h1>
+    <div class="subtitle">— MIDWAY 1981 —</div>
+    <div class="instructions">
+      SWIPE TO MOVE<br>
+      TAP FIRE BUTTON TO SHOOT<br>
+      CLEAR ALL MONSTERS<br>
+      TO ADVANCE THE DUNGEON<br><br>
+      WATCH THE RADAR<br>
+      FOR INVISIBLE ENEMIES
     </div>
-    <p>Watch the RADAR for invisible enemies!<br>Use the WARP tunnels on the sides.</p>
-    <button class="btn" id="startBtn">START</button>
+    <button class="start-btn" id="startBtn">INSERT COIN</button>
   </div>
-
   <div id="gameOverScreen" class="overlay hidden">
     <h1>GAME OVER</h1>
-    <h2 id="finalScore">SCORE: 0</h2>
-    <button class="btn" id="restartBtn">PLAY AGAIN</button>
+    <div class="final-score" id="finalScore">SCORE: 0</div>
+    <div class="final-level" id="finalLevel">DUNGEON: 1</div>
+    <button class="restart-btn" id="restartBtn">TRY AGAIN</button>
   </div>
 </div>
-
 <script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
 <script>
 // ============================================================
-// WIZARD OF WOR — Twin-stick style controls
+// WIZARD OF WOR — Pixel-Art Arcade Recreation
+// Faithful to the 1981 Midway arcade original
 // ============================================================
-const COLS = 22; const ROWS = 14; const CELL = 48;
-const MAZE_W = COLS * CELL; const MAZE_H = ROWS * CELL;
-const RADAR_H = 80; const GAME_W = MAZE_W; const GAME_H = MAZE_H + RADAR_H;
+
+const COLS = 22, ROWS = 14, CELL = 48;
+const MAZE_W = COLS * CELL, MAZE_H = ROWS * CELL;
+const RADAR_H = 64;
+const GAME_W = MAZE_W, GAME_H = MAZE_H + RADAR_H;
 
 const DIR = { NONE:0, LEFT:1, RIGHT:2, UP:3, DOWN:4 };
 const DVEC = {
@@ -176,1120 +70,1422 @@ const DVEC = {
   [DIR.UP]:{x:0,y:-1},   [DIR.DOWN]:{x:0,y:1}, [DIR.NONE]:{x:0,y:0}
 };
 
-let audioCtx;
+// ============================================================
+// PIXEL ART DRAWING ENGINE
+// ============================================================
 
-// Robotic Speech Synth helper using native Web Speech Synthesis (Fully iOS/Safari compatible!)
-function speakRobotic(text) {
-  if (!window.speechSynthesis) return;
-  try {
-    window.speechSynthesis.cancel(); // Stop any current speech
-    const utterance = new SpeechSynthesisUtterance(text);
-    // Find a retro male or distinct voice
-    const voices = window.speechSynthesis.getVoices();
-    if (voices.length > 0) {
-      // Prefer Google US English or standard English male voice
-      const preferred = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Male') || v.name.includes('Google')));
-      if (preferred) utterance.voice = preferred;
+function createPixelSprite(pixels, scale) {
+  const rows = pixels.length;
+  const cols = pixels[0].length;
+  const w = cols * scale;
+  const h = rows * scale;
+  const g = new Phaser.Game.Graphics();
+  g.setSize(w, h);
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const p = pixels[r][c];
+      if (p && p !== '.' && p !== ' ') {
+        const color = p === '#' ? 0xffffff : parseInt(p.slice(1), 16);
+        g.fillStyle(color, 1);
+        g.fillRect(c * scale, r * scale, scale, scale);
+      }
     }
-    utterance.pitch = 0.45; // Low-pitched, robotic, ominous arcade voice
-    utterance.rate = 0.82;  // Slightly slower pacing
-    utterance.volume = 0.85;
-    window.speechSynthesis.speak(utterance);
-  } catch (e) {}
+  }
+  return g;
 }
+
+// All sprite pixel maps (8-bit style, arcade-accurate)
+// Each map is a grid: '#' = pixel color, '.' = transparent
+// Colors defined separately per sprite
+
+function drawPlayerSprite(scene) {
+  // Top-down space warrior — body + helmet + gun
+  const g = scene.make.graphics({x:0, y:0, add:false});
+  const s = 4; // pixel scale
+  // Body (blue suit)
+  g.fillStyle(0x0044aa, 1);
+  g.fillRect(s, s, 6*s, 8*s); // torso
+  g.fillRect(2*s, 9*s, 4*s, 3*s); // legs
+  // Helmet (silver)
+  g.fillStyle(0xaaaaaa, 1);
+  g.fillRect(2*s, 0, 4*s, 3*s); // helmet
+  g.fillRect(0, 2*s, 2*s, 2*s); // helmet sides
+  g.fillRect(6*s, 2*s, 2*s, 2*s);
+  // Visor (red)
+  g.fillStyle(0xff2222, 1);
+  g.fillRect(2*s, 2*s, 4*s, s);
+  // Gun (right hand)
+  g.fillStyle(0x888888, 1);
+  g.fillRect(7*s, 3*s, s, 4*s);
+  // Helmet antenna
+  g.fillStyle(0xffaa00, 1);
+  g.fillRect(3*s, -s, 2*s, s);
+  g.generateTexture('player', (8)*s, (12)*s);
+  g.destroy();
+  return 'player';
+}
+
+function drawBurworSprite(scene) {
+  // Burwor: Wolf-type, blue, always visible
+  const g = scene.make.graphics({x:0, y:0, add:false});
+  const s = 4;
+  // Body (blue wolf)
+  g.fillStyle(0x2244cc, 1);
+  g.fillRect(2*s, 2*s, 4*s, 6*s); // body
+  g.fillRect(0, 4*s, 2*s, 4*s); // left side
+  g.fillRect(6*s, 4*s, 2*s, 4*s); // right side
+  // Head (darker blue)
+  g.fillStyle(0x1122aa, 1);
+  g.fillRect(1*s, 0, 6*s, 3*s); // head
+  // Eyes (white)
+  g.fillStyle(0xffffff, 1);
+  g.fillRect(2*s, s, s, s);
+  g.fillRect(5*s, s, s, s);
+  // Legs
+  g.fillStyle(0x2244cc, 1);
+  g.fillRect(1*s, 8*s, 2*s, 2*s);
+  g.fillRect(5*s, 8*s, 2*s, 2*s);
+  // Tail
+  g.fillStyle(0x1122aa, 1);
+  g.fillRect(0, 7*s, s, 2*s);
+  g.generateTexture('burwor', (8)*s, (10)*s);
+  g.destroy();
+  return 'burwor';
+}
+
+function drawGarworSprite(scene) {
+  // Garwor: T-Rex type, yellow, fades in/out
+  const g = scene.make.graphics({x:0, y:0, add:false});
+  const s = 4;
+  // Body (yellow dinosaur)
+  g.fillStyle(0xddaa00, 1);
+  g.fillRect(2*s, 2*s, 4*s, 6*s); // body
+  g.fillRect(0, 4*s, 2*s, 3*s); // left
+  g.fillRect(6*s, 4*s, 2*s, 3*s); // right
+  // Head (darker yellow, T-rex shape)
+  g.fillStyle(0xbb8800, 1);
+  g.fillRect(1*s, 0, 6*s, 3*s); // head
+  g.fillRect(0, s, s, 2*s); // snout
+  g.fillRect(7*s, s, s, 2*s); // snout
+  // Eyes (red)
+  g.fillStyle(0xff0000, 1);
+  g.fillRect(2*s, s, s, s);
+  g.fillRect(5*s, s, s, s);
+  // Legs
+  g.fillStyle(0xddaa00, 1);
+  g.fillRect(1*s, 8*s, 2*s, 2*s);
+  g.fillRect(5*s, 8*s, 2*s, 2*s);
+  // Tail
+  g.fillStyle(0xbb8800, 1);
+  g.fillRect(0, 6*s, s, 2*s);
+  g.fillRect(0, 7*s, 2*s, s);
+  g.generateTexture('garwor', (8)*s, (10)*s);
+  g.destroy();
+  return 'garwor';
+}
+
+function drawThorworSprite(scene) {
+  // Thorwor: Scorpion type, red, always invisible in maze
+  const g = scene.make.graphics({x:0, y:0, add:false});
+  const s = 4;
+  // Body (red scorpion)
+  g.fillStyle(0xcc2222, 1);
+  g.fillRect(2*s, 2*s, 4*s, 5*s); // body
+  // Tail (curved up)
+  g.fillStyle(0xff0000, 1);
+  g.fillRect(6*s, 0, s, 3*s); // tail up
+  g.fillRect(7*s, 0, 2*s, s); // stinger
+  g.fillRect(7*s, -s, s, s);
+  // Eyes (white)
+  g.fillStyle(0xffffff, 1);
+  g.fillRect(2*s, s, s, s);
+  g.fillRect(5*s, s, s, s);
+  // Legs
+  g.fillStyle(0xcc2222, 1);
+  g.fillRect(0, 5*s, 2*s, s);
+  g.fillRect(6*s, 5*s, 2*s, s);
+  g.fillRect(1*s, 7*s, 2*s, 2*s);
+  g.fillRect(5*s, 7*s, 2*s, 2*s);
+  g.generateTexture('thorwor', (9)*s, (10)*s);
+  g.destroy();
+  return 'thorwor';
+}
+
+function drawWorlukSprite(scene) {
+  // Worluk: Insectoid, flies erratically, yellow
+  const g = scene.make.graphics({x:0, y:0, add:false});
+  const s = 4;
+  // Body (yellow insect)
+  g.fillStyle(0xddaa00, 1);
+  g.fillRect(2*s, 3*s, 4*s, 4*s); // body
+  // Wings (translucent)
+  g.fillStyle(0xffee88, 0.6);
+  g.fillRect(0, 1*s, 2*s, 5*s); // left wing
+  g.fillRect(6*s, 1*s, 2*s, 5*s); // right wing
+  // Head
+  g.fillStyle(0xddaa00, 1);
+  g.fillRect(2*s, 0, 4*s, 3*s); // head
+  // Eyes (black)
+  g.fillStyle(0x000000, 1);
+  g.fillRect(2*s, s, s, s);
+  g.fillRect(5*s, s, s, s);
+  // Legs
+  g.fillStyle(0xddaa00, 1);
+  g.fillRect(1*s, 7*s, 2*s, 2*s);
+  g.fillRect(5*s, 7*s, 2*s, 2*s);
+  g.generateTexture('worluk', (8)*s, (9)*s);
+  g.destroy();
+  return 'worluk';
+}
+
+function drawWizardSprite(scene) {
+  // Wizard of Wor: Blue, teleports, taunts
+  const g = scene.make.graphics({x:0, y:0, add:false});
+  const s = 4;
+  // Robe (blue)
+  g.fillStyle(0x2244cc, 1);
+  g.fillRect(2*s, 3*s, 4*s, 7*s); // robe
+  g.fillRect(0, 5*s, 2*s, 5*s); // robe sides
+  g.fillRect(6*s, 5*s, 2*s, 5*s);
+  // Head (pale)
+  g.fillStyle(0xddccaa, 1);
+  g.fillRect(2*s, 0, 4*s, 4*s); // face
+  // Hat (blue pointy)
+  g.fillStyle(0x2244cc, 1);
+  g.fillRect(1*s, -2*s, 6*s, 3*s); // hat base
+  g.fillRect(3*s, -3*s, 2*s, s); // hat point
+  // Eyes (glowing yellow)
+  g.fillStyle(0xffaa00, 1);
+  g.fillRect(2*s, s, s, s);
+  g.fillRect(5*s, s, s, s);
+  // Beard (gray)
+  g.fillStyle(0xaaaaaa, 1);
+  g.fillRect(2*s, 3*s, 4*s, s);
+  g.fillRect(3*s, 4*s, 2*s, s);
+  // Staff
+  g.fillStyle(0x886644, 1);
+  g.fillRect(7*s, 0, s, 10*s);
+  // Staff gem
+  g.fillStyle(0xff00ff, 1);
+  g.fillRect(7*s, -s, s, s);
+  g.generateTexture('wizard', (8)*s, (12)*s);
+  g.destroy();
+  return 'wizard';
+}
+
+function drawBulletSprite(scene) {
+  const g = scene.make.graphics({x:0, y:0, add:false});
+  g.fillStyle(0xffffff, 1);
+  g.fillRect(0, 2, 12, 4);
+  g.fillStyle(0xffea00, 1);
+  g.fillRect(2, 1, 8, 6);
+  g.generateTexture('bullet', 12, 8);
+  g.destroy();
+  return 'bullet';
+}
+
+function drawEnemyBulletSprite(scene) {
+  const g = scene.make.graphics({x:0, y:0, add:false});
+  g.fillStyle(0xff4488, 1);
+  g.fillRect(0, 2, 12, 4);
+  g.fillStyle(0xffaaaa, 1);
+  g.fillRect(2, 1, 8, 6);
+  g.generateTexture('ebullet', 12, 8);
+  g.destroy();
+  return 'ebullet';
+}
+
+function drawExplosionSprite(scene) {
+  const g = scene.make.graphics({x:0, y:0, add:false});
+  g.fillStyle(0xff4400, 1);
+  g.fillRect(2, 2, 8, 8);
+  g.fillStyle(0xffaa00, 1);
+  g.fillRect(4, 4, 4, 4);
+  g.fillStyle(0xffea00, 1);
+  g.fillRect(5, 5, 2, 2);
+  g.generateTexture('explosion', 12, 12);
+  g.destroy();
+  return 'explosion';
+}
+
+function drawBackupBoxSprite(scene) {
+  const g = scene.make.graphics({x:0, y:0, add:false});
+  const s = 3;
+  // Sealed box (gray with X)
+  g.fillStyle(0x666666, 1);
+  g.fillRect(0, 0, 8*s, 8*s);
+  g.fillStyle(0x444444, 1);
+  g.fillRect(s, s, 6*s, 6*s);
+  // X mark
+  g.fillStyle(0xffaa00, 1);
+  g.fillRect(s, s, s, 6*s);
+  g.fillRect(6*s, s, s, 6*s);
+  g.fillRect(s, 6*s, 6*s, s);
+  g.fillRect(s, s, 6*s, s);
+  g.generateTexture('backup', (8)*s, (8)*s);
+  g.destroy();
+  return 'backup';
+}
+
+// ============================================================
+// AUDIO ENGINE (Web Audio API — no external files needed)
+// ============================================================
+
+let audioCtx = null;
 function getAudio() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  // iOS Safari suspends AudioContext until a user gesture — call resume()
-  // every time we ask for it so audio always restarts after backgrounding
-  // or autoplay-policy suspension. Mirrors the Python sounds.py defensive
-  // mixer re-init pattern.
-  if (audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
   return audioCtx;
 }
-// Unlock audio on first user gesture (covers iOS autoplay block).
-function unlockAudio(){const c=getAudio();if(c.state==='suspended')c.resume().catch(()=>{});}
-document.addEventListener('touchstart',unlockAudio,{once:false,passive:true});
-document.addEventListener('mousedown',unlockAudio,{once:false,passive:true});
-document.addEventListener('keydown',unlockAudio,{once:false,passive:true});
+
+function playDragnetTheme() {
+  // 5-note Dragnet opening (C, G, C, G, C)
+  try {
+    const ctx = getAudio();
+    const notes = [261.63, 392.00, 523.25, 392.00, 523.25];
+    const now = ctx.currentTime;
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.15, now + i * 0.2);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.2 + 0.18);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(now + i * 0.2);
+      osc.stop(now + i * 0.2 + 0.2);
+    });
+  } catch(e) {}
+}
 
 function playShootSound() {
-  const ctx = getAudio();
-  // Frequency chirp 880→200Hz for that classic WoW laser zap (matches Python _chirp).
-  const osc = ctx.createOscillator(); const gain = ctx.createGain(); const filter = ctx.createBiquadFilter();
-  osc.type = 'sawtooth';
-  osc.frequency.setValueAtTime(880, ctx.currentTime);
-  osc.frequency.exponentialRampToValueAtTime(200, ctx.currentTime + 0.12);
-  filter.type = 'lowpass'; filter.frequency.value = 2200;
-  gain.gain.setValueAtTime(0.28, ctx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
-  osc.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
-  osc.start(); osc.stop(ctx.currentTime + 0.2);
+  try {
+    const ctx = getAudio();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(800, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(200, ctx.currentTime + 0.1);
+    gain.gain.setValueAtTime(0.12, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.1);
+  } catch(e) {}
 }
-function playEnemyShootSound(){
-  const ctx=getAudio();
-  const osc=ctx.createOscillator(),gain=ctx.createGain();
-  osc.type='square';
-  osc.frequency.setValueAtTime(400,ctx.currentTime);
-  osc.frequency.exponentialRampToValueAtTime(100,ctx.currentTime+0.14);
-  gain.gain.setValueAtTime(0.18,ctx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.16);
-  osc.connect(gain);gain.connect(ctx.destination);
-  osc.start();osc.stop(ctx.currentTime+0.18);
-}
-function playWorlukSound(){
-  const ctx=getAudio();
-  const osc=ctx.createOscillator(),gain=ctx.createGain();
-  osc.type='sine';
-  osc.frequency.setValueAtTime(1200,ctx.currentTime);
-  osc.frequency.exponentialRampToValueAtTime(200,ctx.currentTime+0.4);
-  gain.gain.setValueAtTime(0.35,ctx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.45);
-  osc.connect(gain);gain.connect(ctx.destination);
-  osc.start();osc.stop(ctx.currentTime+0.5);
-}
+
 function playExplosionSound() {
-  const ctx = getAudio();
-  const osc = ctx.createOscillator(); const gain = ctx.createGain();
-  osc.type = 'sine'; osc.frequency.value = 90; gain.gain.value = 0.6;
-  gain.gain.linearRampToValueAtTime(0.001, ctx.currentTime + 0.6);
-
-  const noise = ctx.createBufferSource();
-  const buffer = ctx.createBuffer(1, ctx.sampleRate * 0.6, ctx.sampleRate);
-  const data = buffer.getChannelData(0); for (let i=0;i<data.length;i++) data[i]=Math.random()*2-1;
-  noise.buffer = buffer;
-  const nf = ctx.createBiquadFilter(); nf.type='lowpass'; nf.frequency.value=800;
-  const ng = ctx.createGain(); ng.gain.value=0.7; ng.gain.linearRampToValueAtTime(0.001,ctx.currentTime+0.55);
-  osc.connect(gain); gain.connect(ctx.destination);
-  noise.connect(nf); nf.connect(ng); ng.connect(ctx.destination);
-  osc.start(); noise.start(); osc.stop(ctx.currentTime+0.65); noise.stop(ctx.currentTime+0.65);
-}
-
-// iOS/Safari compatible synthetic audio fallbacks (no .ogg support needed!)
-function playHurtSound() {
-  const ctx = getAudio();
-  const osc = ctx.createOscillator(); const gain = ctx.createGain();
-  osc.type = 'sawtooth';
-  osc.frequency.setValueAtTime(320, ctx.currentTime);
-  osc.frequency.linearRampToValueAtTime(80, ctx.currentTime + 0.32);
-  gain.gain.setValueAtTime(0.25, ctx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
-  osc.connect(gain); gain.connect(ctx.destination);
-  osc.start(); osc.stop(ctx.currentTime + 0.38);
-}
-
-function playDungeonClearSound() {
-  const ctx = getAudio();
-  const now = ctx.currentTime;
-  const notes = [440, 554, 659, 880];
-  notes.forEach((freq, i) => {
-    const osc = ctx.createOscillator(); const gain = ctx.createGain();
-    osc.type = 'triangle'; osc.frequency.value = freq;
-    gain.gain.setValueAtTime(0, now + i * 0.1);
-    gain.gain.linearRampToValueAtTime(0.2, now + i * 0.1 + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.1 + 0.22);
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.start(now + i * 0.1); osc.stop(now + i * 0.1 + 0.25);
-  });
+  try {
+    const ctx = getAudio();
+    const bufferSize = ctx.sampleRate * 0.3;
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, 2);
+    }
+    const source = ctx.createBufferSource();
+    const gain = ctx.createGain();
+    source.buffer = buffer;
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    source.connect(gain).connect(ctx.destination);
+    source.start();
+  } catch(e) {}
 }
 
 function playWarpSound() {
-  const ctx = getAudio();
-  const osc = ctx.createOscillator(); const gain = ctx.createGain();
-  osc.type = 'sine';
-  osc.frequency.setValueAtTime(180, ctx.currentTime);
-  osc.frequency.exponentialRampToValueAtTime(1100, ctx.currentTime + 0.24);
-  gain.gain.setValueAtTime(0.2, ctx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.26);
-  osc.connect(gain); gain.connect(ctx.destination);
-  osc.start(); osc.stop(ctx.currentTime + 0.28);
+  try {
+    const ctx = getAudio();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(200, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(2000, ctx.currentTime + 0.3);
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.3);
+  } catch(e) {}
 }
 
-// === Maze generator ===
-// Produces clean 4-way-symmetric Wizard-of-Wor style mazes with a guaranteed
-// open horizontal corridor at the warp row and a flood-fill connectivity pass
-// that knocks out walls if any open cell ends up isolated. The original
-// generator could leave isolated pockets and 2x2 fills that visually looked
-// like blobs; this design uses short vertical/horizontal wall "sticks" placed
-// on a coarse 2-cell lattice so corridors are always at least 1 cell wide.
+function playHurtSound() {
+  try {
+    const ctx = getAudio();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(300, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(50, ctx.currentTime + 0.3);
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.3);
+  } catch(e) {}
+}
+
+function playDungeonClearSound() {
+  try {
+    const ctx = getAudio();
+    const notes = [523.25, 659.25, 783.99, 1046.50];
+    const now = ctx.currentTime;
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.1, now + i * 0.15);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.15 + 0.14);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(now + i * 0.15);
+      osc.stop(now + i * 0.15 + 0.15);
+    });
+  } catch(e) {}
+}
+
+function playWorlukSound() {
+  try {
+    const ctx = getAudio();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(100, ctx.currentTime);
+    osc.frequency.linearRampToValueAtTime(800, ctx.currentTime + 0.5);
+    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.5);
+  } catch(e) {}
+}
+
+function playEnemyShootSound() {
+  try {
+    const ctx = getAudio();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(600, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.08);
+    gain.gain.setValueAtTime(0.08, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.08);
+  } catch(e) {}
+}
+
+function playWizardTaunt() {
+  try {
+    const ctx = getAudio();
+    const taunts = [
+      [200, 300, 200, 400, 200],
+      [150, 250, 350, 250, 150],
+      [300, 200, 400, 200, 300]
+    ];
+    const taunt = taunts[Math.floor(Math.random() * taunts.length)];
+    const now = ctx.currentTime;
+    taunt.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = i % 2 === 0 ? 'square' : 'sawtooth';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.08, now + i * 0.12);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.12 + 0.1);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(now + i * 0.12);
+      osc.stop(now + i * 0.12 + 0.11);
+    });
+  } catch(e) {}
+}
+
+// Speech synthesis for Wizard taunts
+function speakRobotic(text) {
+  if (!window.speechSynthesis) return;
+  try {
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.pitch = 0.3;
+    utter.rate = 0.7;
+    utter.volume = 0.8;
+    speechSynthesis.speak(utter);
+  } catch(e) {}
+}
+
+// ============================================================
+// MAZE GENERATION (faithful to arcade)
+// ============================================================
+
 function generateMaze(level) {
   const g = [];
-  for(let r=0;r<ROWS;r++){g.push([]);for(let c=0;c<COLS;c++)g[r].push(0);}
+  for (let r = 0; r < ROWS; r++) {
+    g.push([]);
+    for (let c = 0; c < COLS; c++) g[r].push(0);
+  }
   // Outer border
-  for(let c=0;c<COLS;c++){g[0][c]=1;g[ROWS-1][c]=1;}
-  for(let r=0;r<ROWS;r++){g[r][0]=1;g[r][COLS-1]=1;}
-  // Warp openings on the two middle rows
-  const m1=(ROWS/2-1)|0, m2=(ROWS/2)|0;
-  g[m1][0]=0;g[m1][COLS-1]=0;g[m2][0]=0;g[m2][COLS-1]=0;
+  for (let c = 0; c < COLS; c++) { g[0][c] = 1; g[ROWS-1][c] = 1; }
+  for (let r = 0; r < ROWS; r++) { g[r][0] = 1; g[r][COLS-1] = 1; }
+  // Warp openings on two middle rows
+  const m1 = (ROWS/2-1)|0, m2 = (ROWS/2)|0;
+  g[m1][0] = 0; g[m1][COLS-1] = 0; g[m2][0] = 0; g[m2][COLS-1] = 0;
 
   // Deterministic PRNG seeded by level
-  let seed=level*7919+13;
-  function rnd(){seed=(seed*1103515245+12345)&0x7fffffff;return seed/0x7fffffff;}
+  let seed = level * 7919 + 13;
+  function rnd() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
 
-  const halfC=(COLS/2)|0;     // 11
-  const halfR=(ROWS/2)|0;     // 7
+  const halfC = (COLS/2)|0;
+  const halfR = (ROWS/2)|0;
 
-  // Place walls in the top-left quadrant and mirror 4 ways.
-  // Lattice points at (r,c) where r,c are even — between them we leave
-  // guaranteed open corridors so the maze never collapses into solid blobs.
-  function paintCell(r,c,v){
-    if(r<=0||r>=ROWS-1||c<=0||c>=COLS-1)return;
-    g[r][c]=v;
-    g[ROWS-1-r][c]=v;
-    g[r][COLS-1-c]=v;
-    g[ROWS-1-r][COLS-1-c]=v;
+  function paintCell(r, c, v) {
+    if (r <= 0 || r >= ROWS-1 || c <= 0 || c >= COLS-1) return;
+    g[r][c] = v;
+    g[ROWS-1-r][c] = v;
+    g[r][COLS-1-c] = v;
+    g[ROWS-1-r][COLS-1-c] = v;
   }
 
-  for(let r=2;r<halfR;r+=2){
-    for(let c=2;c<halfC;c+=2){
-      const k=rnd();
-      if(k<0.40){
-        // Vertical stick, length 1-2
-        const len=(rnd()<0.55)?2:1;
-        for(let i=0;i<len && r+i<halfR;i++) paintCell(r+i,c,1);
-      } else if(k<0.65){
-        // Horizontal stick, length 2
-        paintCell(r,c,1);
-        if(c+1<halfC) paintCell(r,c+1,1);
-      } else if(k<0.78){
-        // Single pillar
-        paintCell(r,c,1);
-      }
-      // else: leave open
-    }
-  }
+  // Maze density decreases with level (arcade accurate)
+  const wallChance = Math.max(0.25, 0.50 - level * 0.025);
+  const stickChance = Math.max(0.30, 0.65 - level * 0.025);
 
-  // Carve a clean horizontal corridor on the warp row (m1) so warps stay usable.
-  for(let c=1;c<COLS-1;c++) g[m1][c]=0;
-  // And keep the m2 row mostly open by clearing every wall that touches it.
-  // (We allow a few accent walls but ensure horizontal flow.)
-  for(let c=1;c<COLS-1;c++){
-    if(g[m2][c]===1 && rnd()<0.6) g[m2][c]=0;
-  }
-
-  // Guarantee player + canonical enemy spawn cells are open
-  const startR=ROWS-3, startC=(COLS/2)|0;
-  paintCell(startR,startC,0);
-  paintCell(startR,startC-1,0);
-  paintCell(2,2,0); paintCell(2,4,0); paintCell(2,6,0);
-  paintCell(2,halfC-1,0); paintCell(2,halfC,0);
-
-  // Connectivity: flood-fill from player spawn; knock walls to recover any
-  // isolated open pockets. This is the safety net that makes the maze playable
-  // regardless of random outcomes.
-  const visited=[];
-  for(let r=0;r<ROWS;r++) visited.push(new Array(COLS).fill(false));
-  const stack=[[startR,startC]]; visited[startR][startC]=true;
-  while(stack.length){
-    const [r,c]=stack.pop();
-    const nb=[[r+1,c],[r-1,c],[r,c+1],[r,c-1]];
-    for(const [nr,nc] of nb){
-      if(nr<0||nr>=ROWS||nc<0||nc>=COLS) continue;
-      if(g[nr][nc]===0 && !visited[nr][nc]){visited[nr][nc]=true;stack.push([nr,nc]);}
-    }
-  }
-  // Find any unreached open cell and carve a path to a visited neighbor.
-  for(let r=1;r<ROWS-1;r++){
-    for(let c=1;c<COLS-1;c++){
-      if(g[r][c]===0 && !visited[r][c]){
-        // Try to break a single wall to reach a visited neighbor (2 cells away)
-        const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
-        let carved=false;
-        for(const [dr,dc] of dirs){
-          const wr=r+dr, wc=c+dc;
-          const tr=r+dr*2, tc=c+dc*2;
-          if(tr>0&&tr<ROWS-1&&tc>0&&tc<COLS-1&&visited[tr][tc]&&g[wr][wc]===1){
-            paintCell(wr,wc,0);
-            visited[r][c]=true; visited[wr][wc]=true; carved=true; break;
-          }
-        }
-        // Fallback: if no carve worked (rare), just fill the orphan with wall.
-        if(!carved) g[r][c]=1;
+  for (let r = 2; r < halfR; r += 2) {
+    for (let c = 2; c < halfC; c += 2) {
+      const k = rnd();
+      if (k < wallChance) {
+        const len = (rnd() < 0.55) ? 2 : 1;
+        for (let i = 0; i < len && r + i < halfR; i++) paintCell(r+i, c, 1);
+      } else if (k < stickChance) {
+        paintCell(r, c, 1);
+        if (c+1 < halfC) paintCell(r, c+1, 1);
+      } else if (k < stickChance + 0.13) {
+        paintCell(r, c, 1);
       }
     }
   }
+
+  // Clear warp row
+  for (let c = 1; c < COLS-1; c++) g[m1][c] = 0;
+  for (let c = 1; c < COLS-1; c++) {
+    if (g[m2][c] === 1 && rnd() < 0.6) g[m2][c] = 0;
+  }
+
+  // Special dungeons: The Arena (level 6) and The Pit (level 13, 19, 25...)
+  const isPit = (level >= 13 && (level - 13) % 6 === 0);
+  const isArena = (level === 6);
+
+  if (isArena) {
+    // Wide open space — remove center walls
+    for (let r = 3; r < 11; r++) {
+      for (let c = 5; c < 17; c++) {
+        g[r][c] = 0;
+      }
+    }
+  }
+
+  if (isPit) {
+    // Very few walls — high danger
+    for (let r = 2; r < ROWS-2; r += 2) {
+      for (let c = 2; c < COLS-2; c += 2) {
+        if (rnd() < 0.15) paintCell(r, c, 1);
+      }
+    }
+  }
+
+  // Guarantee player + spawn cells are open
+  const startR = ROWS-3, startC = (COLS/2)|0;
+  paintCell(startR, startC, 0);
+  paintCell(startR, startC-1, 0);
+  paintCell(2, 2, 0); paintCell(2, 4, 0); paintCell(2, 6, 0);
+  paintCell(2, halfC-1, 0); paintCell(2, halfC, 0);
 
   return g;
 }
 
+function isWall(maze, c, r) {
+  if (r < 0 || r >= ROWS) return true;
+  if (c < 0 || c >= COLS) return false;
+  return maze[r][c] === 1;
+}
+
+function findOpenCell(maze, c, r) {
+  if (!isWall(maze, c, r) && r >= 0 && r < ROWS && c >= 0 && c < COLS) return {c, r};
+  const seen = new Set();
+  const key = (cc, rr) => rr * COLS + cc;
+  const q = [[c, r]]; seen.add(key(c, r));
+  while (q.length) {
+    const [cc, rr] = q.shift();
+    if (rr > 0 && rr < ROWS-1 && cc > 0 && cc < COLS-1 && !isWall(maze, cc, rr)) return {c:cc, r:rr};
+    [[0,-1],[0,1],[-1,0],[1,0]].forEach(([dc, dr]) => {
+      const nk = key(cc+dc, rr+dr);
+      if (!seen.has(nk) && cc+dc >= 0 && cc+dc < COLS && rr+dr >= 0 && rr+dr < ROWS) {
+        seen.add(nk); q.push([cc+dc, rr+dr]);
+      }
+    });
+  }
+  return null;
+}
+
+// ============================================================
+// GAME SCENE
+// ============================================================
+
 class GameScene extends Phaser.Scene {
-  constructor(){super('game');}
-  preload(){
-    // === Kenney asset loading ===
-    // Player + Wizard (humanoid sprites from Kenney Roguelike Characters pack)
-    this.load.image('spr_player','assets/tiles/player.png');
-    this.load.image('spr_wizard','assets/tiles/wizard.png');
-    // Robot enemies (148x154 top-view PNGs from Kenney Robot Pack)
-    this.load.image('spr_robot_green','assets/enemies/robot_green.png');
-    this.load.image('spr_robot_red','assets/enemies/robot_red.png');
-    this.load.image('spr_robot_blue','assets/enemies/robot_blue.png');
-    this.load.image('spr_robot_yellow','assets/enemies/robot_yellow.png');
-    this.load.image('spr_robot_3Dyellow','assets/enemies/robot_3Dyellow.png');
-    // Explosion frames (Kenney pixel explosion - 9 frames)
-    for(let i=0;i<9;i++){
-      const n=String(i).padStart(2,'0');
-      this.load.image('exp_'+i,'assets/explosions/pixelExplosion'+n+'.png');
-    }
-    // Audio preloading (Only if .ogg format is supported natively, e.g. not on iOS Safari)
-    const canPlayOgg = document.createElement('audio').canPlayType('audio/ogg; codecs="vorbis"') !== '';
-    this.canPlayOgg = canPlayOgg;
-    if(canPlayOgg) {
-      this.load.audio('snd_shoot','assets/sounds/shoot.ogg');
-      this.load.audio('snd_explosion','assets/sounds/explosion.ogg');
-      this.load.audio('snd_hurt','assets/sounds/hurt.ogg');
-      this.load.audio('snd_warp','assets/sounds/warp.ogg');
-      this.load.audio('snd_wizard_teleport','assets/sounds/wizard_teleport.ogg');
-      this.load.audio('snd_gameover','assets/sounds/gameover.ogg');
-      this.load.audio('snd_dungeon_clear','assets/sounds/dungeon_clear.ogg');
-      this.load.audio('snd_enemy_appear','assets/sounds/enemy_appear.ogg');
-      this.load.audio('snd_radar','assets/sounds/radar.ogg');
-    }
+  constructor() { super('game'); }
+
+  preload() {
+    // No external assets — all procedural pixel art
   }
-  create(){
-    window._gameScene=this;
+
+  create() {
+    window._gameScene = this;
     this.cameras.main.setBackgroundColor('#000');
-    this.createTextures();
-    this.score=0;this.lives=3;this.level=1;this.state='idle';
-    this.bullets=[];this.enemyBullets=[];this.player=null;this.enemies=[];
-    this.maze=null;this.mazeGfx=this.add.graphics();this.mazeTiles=this.add.container(0,0);this.mazeTiles.setDepth(0);this.entityLayer=this.add.container(0,0);this.entityLayer.setDepth(10);this.radarGfx=this.add.graphics();this.radarGfx.setDepth(20);
-    this.cursors=this.input.keyboard.createCursorKeys();
-    this.spaceKey=this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
-    this.spaceKey.on('down',()=>this.tryFire());
-    this.touchDir=DIR.NONE;this.queuedDir=DIR.NONE;
-    this.fireDir=DIR.NONE; // NEW: independent firing direction
+
+    // Draw all pixel art sprites
+    drawPlayerSprite(this);
+    drawBurworSprite(this);
+    drawGarworSprite(this);
+    drawThorworSprite(this);
+    drawWorlukSprite(this);
+    drawWizardSprite(this);
+    drawBulletSprite(this);
+    drawEnemyBulletSprite(this);
+    drawExplosionSprite(this);
+    drawBackupBoxSprite(this);
+
+    // Score
+    this.score = 0; this.lives = 3; this.level = 1; this.state = 'idle';
+    this.bullets = []; this.enemyBullets = []; this.player = null; this.enemies = [];
+    this.maze = null; this.mazeGfx = this.add.graphics();
+    this.mazeTiles = this.add.container(0, 0); this.mazeTiles.setDepth(0);
+    this.entityLayer = this.add.container(0, 0); this.entityLayer.setDepth(10);
+    this.radarGfx = this.add.graphics(); this.radarGfx.setDepth(20);
+
+    // 4-way controls
+    this.cursors = this.input.keyboard.createCursorKeys();
+    this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+    this.spaceKey.on('down', () => this.tryFire());
+
+    // Touch controls
+    this.touchDir = DIR.NONE; this.queuedDir = DIR.NONE;
+    this.fireDir = DIR.NONE;
+
+    // Speed-up tracking
+    this.dungeonStartTime = 0;
+    this.speedUpInterval = 7000; // 7 seconds (arcade accurate)
+
+    // Backup warrior
+    this.backupActive = false; this.backupTimer = 0; this.backupX = 0; this.backupY = 0;
+    this.backupGroup = null;
+
     this.updateHUD();
+
+    // Touch input
+    this.setupTouchInput();
   }
 
-  createTextures(){
-    // === Kenney asset mapping ===
-    // Game logic uses texture keys: burwor/garwor/thorwor/worluk/wizard/player/bullet/ebullet.
-    // We alias those keys to the Kenney sprites already loaded in preload().
-    // Each enemy type maps to a robot color (tint applied at spawn time for variety).
-    // Aliases:
-    //   burwor  -> green robot   (slow, dumb)
-    //   garwor  -> red robot     (fades visible/invisible)
-    //   thorwor -> blue robot    (always invisible)
-    //   worluk  -> yellow robot  (flees)
-    //   wizard  -> human mage    (teleports)
-    //   player  -> human hero
-    const aliases = {
-      'burwor':  'spr_robot_green',
-      'garwor':  'spr_robot_red',
-      'thorwor': 'spr_robot_blue',
-      'worluk':  'spr_robot_yellow',
-      'wizard':  'spr_wizard',
-      'player':  'spr_player',
-    };
-    for(const [alias, src] of Object.entries(aliases)){
-      if(this.textures.exists(src) && !this.textures.exists(alias)){
-        this.textures.addImage(alias, this.textures.get(src).getSourceImage());
-      }
-    }
-    // Bullets: keep procedural (Kenney pack has no clean bolt) — they're tiny pixel rects.
-    const g=this.make.graphics({x:0,y:0,add:false});
-    if(!this.textures.exists('bullet')){
-      g.clear();g.fillStyle(0xffffff,1);g.fillRect(0,2,12,4);g.fillStyle(0xffea00,1);g.fillRect(2,1,8,6);g.generateTexture('bullet',12,8);
-    }
-    if(!this.textures.exists('ebullet')){
-      g.clear();g.fillStyle(0xff4488,1);g.fillRect(0,2,12,4);g.fillStyle(0xffaaaa,1);g.fillRect(2,1,8,6);g.generateTexture('ebullet',12,8);
-    }
-    g.destroy();
+  setupTouchInput() {
+    const gameArea = document.getElementById('gameContainer');
+    const startBtn = document.getElementById('startBtn');
+    const restartBtn = document.getElementById('restartBtn');
 
-    // === Kenney sound helpers ===
-    // Wrap Phaser's sound manager with a uniform play() helper that:
-    //  - silently ignores missing keys (so we never crash if a sound failed to load)
-    //  - caps simultaneous voices at 3 per key (prevents iOS audio glitching)
-    //  - honors a master "muted" toggle for future settings UI
-    this.kenneySounds = {};
-    const SOUND_KEYS=['snd_shoot','snd_explosion','snd_hurt','snd_warp',
-      'snd_wizard_teleport','snd_gameover','snd_dungeon_clear',
-      'snd_enemy_appear','snd_radar'];
-    SOUND_KEYS.forEach(k=>{
-      if(this.cache.audio.exists(k)) this.kenneySounds[k]=this.sound.add(k,{volume:0.5});
+    startBtn.addEventListener('click', () => {
+      startBtn.blur();
+      startBegin();
     });
-    this.playK = (key, opts={}) => {
-      const s=this.kenneySounds[key];
-      if(s) {
-        try{ s.play(opts); }catch(e){}
-      } else {
-        // High-quality synthetic Web Audio engine fallback (for Safari / iOS)
-        if(key === 'snd_shoot') playShootSound();
-        else if(key === 'snd_explosion') playExplosionSound();
-        else if(key === 'snd_hurt' || key === 'snd_gameover') playHurtSound();
-        else if(key === 'snd_warp' || key === 'snd_wizard_teleport' || key === 'snd_enemy_appear') playWarpSound();
-        else if(key === 'snd_dungeon_clear') playDungeonClearSound();
-      }
-    };
-  }
+    startBtn.addEventListener('touchend', e => { e.preventDefault(); startBegin(); });
 
-  updateHUD(){document.getElementById('score').textContent=this.score;document.getElementById('lives').textContent=this.lives;document.getElementById('level').textContent=this.level;}
-
-  _begin(){
-    document.getElementById('startScreen').classList.add('hidden');
-    document.getElementById('gameOverScreen').classList.add('hidden');
-    this.score=0;this.lives=3;this.level=1;
-    this.updateHUD();
-    speakRobotic("WARRIOR! PREPARE FOR BATTLE!");
-    this.startLevel();
-  }
-  startLevel(){
-    this.clearAll();this.maze=generateMaze(this.level);this.drawMaze();
-    const midR=(ROWS/2)|0;
-    // Validate player spawn against the maze — fall back to BFS if blocked.
-    let pCol=(COLS/2)|0, pRow=ROWS-3;
-    const pSafe=this.findOpenCell(pCol,pRow); if(pSafe){pCol=pSafe.c;pRow=pSafe.r;}
-    const px=pCol*CELL+CELL/2, py=pRow*CELL+CELL/2;
-    this.player=this.spawnEntity('player',px,py,{type:'player',speed:120,dir:DIR.NONE,alive:true});
-    const enemyCount=Math.min(6+this.level,10);const types=[];
-    for(let i=0;i<enemyCount;i++){const r=Math.random();if(this.level>=3&&r<0.2)types.push('thorwor');else if(this.level>=2&&r<0.45)types.push('garwor');else types.push('burwor');}
-    const sp=[[2,2],[2,6],[2,10],[2,14],[2,18],[4,4],[4,18],[midR,2],[midR,COLS-3]];
-    types.forEach((t,i)=>{
-      const p=sp[i%sp.length];
-      // STRICT spawn validation: BFS to nearest open cell so enemies are
-      // never embedded inside a wall (was the original "stuck enemies" bug).
-      const safe=this.findOpenCell(p[1],p[0]);
-      if(!safe) return; // maze entirely solid — should never happen post-flood-fill
-      this.spawnEnemy(t,safe.c*CELL+CELL/2,safe.r*CELL+CELL/2);
+    restartBtn.addEventListener('click', () => {
+      restartBtn.blur();
+      document.getElementById('gameOverScreen').classList.add('hidden');
+      if (window._gameScene && window._gameScene._begin) window._gameScene._begin();
     });
-    this.worlukSpawned=false;this.wizardSpawned=false;this.state='playing';
+    restartBtn.addEventListener('touchend', e => { e.preventDefault(); restartBtn.blur(); document.getElementById('gameOverScreen').classList.add('hidden'); if (window._gameScene && window._gameScene._begin) window._gameScene._begin(); });
+
+    // Touch D-pad (left side) + fire button (right side)
+    const dpad = this.add.container(0, 0).setDepth(100);
+    dpad.setScrollFactor(0);
+
+    // D-pad arrows
+    const arrowSize = 50;
+    const arrowColor = 0x00ff88;
+    const arrowAlpha = 0.3;
+
+    // Up
+    const upBtn = this.add.rectangle(80, GAME_H - 120, arrowSize, arrowSize, arrowColor, arrowAlpha)
+      .setInteractive({ useHandCursor: true }).setScrollFactor(0);
+    this.add.text(80, GAME_H - 120, '▲', { fontFamily: 'Press Start 2P', fontSize: '20px', color: '#00ff88' })
+      .setOrigin(0.5).setScrollFactor(0);
+    upBtn.on('pointerdown', () => { this.queuedDir = DIR.UP; this.touchDir = DIR.UP; });
+    upBtn.on('pointerup', () => { if (this.touchDir === DIR.UP) this.touchDir = DIR.NONE; });
+    upBtn.on('pointerout', () => { if (this.touchDir === DIR.UP) this.touchDir = DIR.NONE; });
+
+    // Down
+    const downBtn = this.add.rectangle(80, GAME_H - 30, arrowSize, arrowSize, arrowColor, arrowAlpha)
+      .setInteractive({ useHandCursor: true }).setScrollFactor(0);
+    this.add.text(80, GAME_H - 30, '▼', { fontFamily: 'Press Start 2P', fontSize: '20px', color: '#00ff88' })
+      .setOrigin(0.5).setScrollFactor(0);
+    downBtn.on('pointerdown', () => { this.queuedDir = DIR.DOWN; this.touchDir = DIR.DOWN; });
+    downBtn.on('pointerup', () => { if (this.touchDir === DIR.DOWN) this.touchDir = DIR.NONE; });
+    downBtn.on('pointerout', () => { if (this.touchDir === DIR.DOWN) this.touchDir = DIR.NONE; });
+
+    // Left
+    const leftBtn = this.add.rectangle(80 - 65, GAME_H - 75, arrowSize, arrowSize, arrowColor, arrowAlpha)
+      .setInteractive({ useHandCursor: true }).setScrollFactor(0);
+    this.add.text(80 - 65, GAME_H - 75, '◄', { fontFamily: 'Press Start 2P', fontSize: '20px', color: '#00ff88' })
+      .setOrigin(0.5).setScrollFactor(0);
+    leftBtn.on('pointerdown', () => { this.queuedDir = DIR.LEFT; this.touchDir = DIR.LEFT; });
+    leftBtn.on('pointerup', () => { if (this.touchDir === DIR.LEFT) this.touchDir = DIR.NONE; });
+    leftBtn.on('pointerout', () => { if (this.touchDir === DIR.LEFT) this.touchDir = DIR.NONE; });
+
+    // Right
+    const rightBtn = this.add.rectangle(80 + 65, GAME_H - 75, arrowSize, arrowSize, arrowColor, arrowAlpha)
+      .setInteractive({ useHandCursor: true }).setScrollFactor(0);
+    this.add.text(80 + 65, GAME_H - 75, '►', { fontFamily: 'Press Start 2P', fontSize: '20px', color: '#00ff88' })
+      .setOrigin(0.5).setScrollFactor(0);
+    rightBtn.on('pointerdown', () => { this.queuedDir = DIR.RIGHT; this.touchDir = DIR.RIGHT; });
+    rightBtn.on('pointerup', () => { if (this.touchDir === DIR.RIGHT) this.touchDir = DIR.NONE; });
+    rightBtn.on('pointerout', () => { if (this.touchDir === DIR.RIGHT) this.touchDir = DIR.NONE; });
+
+    // Fire button (right side)
+    const fireBtn = this.add.circle(GAME_W - 70, GAME_H - 70, 45, 0xff0000, 0.3)
+      .setInteractive({ useHandCursor: true }).setScrollFactor(0);
+    this.add.text(GAME_W - 70, GAME_H - 70, 'FIRE', { fontFamily: 'Press Start 2P', fontSize: '10px', color: '#ff0000' })
+      .setOrigin(0.5).setScrollFactor(0);
+    fireBtn.on('pointerdown', () => { this.tryFire(); });
   }
-  spawnEntity(key,x,y,props){const img=this.add.image(x,y,key);img.setDisplaySize(CELL-6,CELL-6);Object.assign(img,props);img.gridCol=Math.floor(x/CELL);img.gridRow=Math.floor(y/CELL);img.moveCooldown=0;this.entityLayer.add(img);return img;}
-  spawnEnemy(type,x,y){
-    const cfg={burwor:{speed:55,visible:1,points:100},garwor:{speed:75,visible:0.6,points:200,fades:true},thorwor:{speed:95,visible:0,points:500,invisible:true},worluk:{speed:140,visible:1,points:1000,flees:true},wizard:{speed:90,visible:1,points:2500,teleports:true}}[type];
-    const fleeRight = type==='worluk' ? (x < MAZE_W/2) : false;
-    const e=this.spawnEntity(type,x,y,{type,alive:true,dir:Phaser.Math.RND.pick([DIR.LEFT,DIR.RIGHT,DIR.UP,DIR.DOWN]),speed:cfg.speed,points:cfg.points,fades:cfg.fades||false,invisible:cfg.invisible||false,flees:cfg.flees||false,teleports:cfg.teleports||false,fireTimer:Phaser.Math.Between(2000,6000),teleportTimer:type==='wizard'?Phaser.Math.Between(3000,5000):0,escapeTimer:type==='worluk'?1200:0,fleeRight:fleeRight});
-    e._isTopView = (type==='burwor' || type==='garwor' || type==='thorwor' || type==='worluk');
-    
-    // Kenney sprites are natively colored beautifully (Green alien, Red alien, Blue ufo).
-    // No full tint required, preventing solid color-blown "blobs"!
-    const arcadeColors={
-      burwor:  0x22dd33, // Green
-      garwor:  0xffee00, // Yellow
-      thorwor: 0x0088ff, // Blue
-      worluk:  0xffee00, // Yellow
-      wizard:  0x0088ff, // Blue
-    };
 
-    // Glow halo matching arcade colors
-    const halo=this.add.circle(x,y,CELL*0.45,arcadeColors[type]||0xffffff,0.22);
-    this.entityLayer.add(halo);
-    halo.setDepth(e.depth-1);
-    e._halo=halo;
+  update(time, delta) {
+    if (this.state !== 'playing') return;
+    const dt = delta / 1000;
 
-    if(type==='worluk'){e.dir=fleeRight?DIR.RIGHT:DIR.LEFT;playWorlukSound();this.playK('snd_warp');}
-    if(type==='wizard'){
-      speakRobotic("AH! THE WIZARD OF WOR!");
-      this.playK('snd_wizard_teleport');
+    // Track dungeon time for speed-up
+    if (this.dungeonStartTime === 0) this.dungeonStartTime = time;
+    const elapsed = time - this.dungeonStartTime;
+    const speedMultiplier = 1 + Math.floor(elapsed / this.speedUpInterval) * 0.15; // 15% faster every 7s
+
+    this.handleInput();
+
+    // Player movement
+    if (this.player && this.player.alive) {
+      this.player.speed = 120 * Math.min(speedMultiplier, 3); // Cap at 3x
+      this.moveEntity(this.player, dt);
     }
-    
-    // Thorwors are fully invisible in the maze (only visible on radar)
-    if(cfg.invisible) e.setAlpha(0);
-    else if(cfg.fades) e.setAlpha(cfg.visible);
-    this.enemies.push(e);return e;
-  }
-  clearAll(){this.entityLayer.removeAll(true);this.bullets=[];this.enemyBullets=[];this.enemies=[];this.player=null;}
-  drawMaze(){
-    // Procedural glowing neon maze rendering (Tron space-grid arcade style).
-    // Completely eliminates medieval muddy stone floor tile and wall assets
-    // to match a high-tech sci-fi theme consistent with glowing robots.
-    if(!this.mazeTiles) this.mazeTiles=this.add.container(0,0);
-    this.mazeTiles.removeAll(true);
-    this.mazeTiles.setDepth(0);
-    
-    const g = this.add.graphics();
-    g.setDepth(1);
-    this.mazeTiles.add(g);
-    
-    // Pitch-black space background is standard. We render glowing neon grid walls.
-    for(let r=0;r<ROWS;r++){
-      for(let c=0;c<COLS;c++){
-        if(this.maze[r][c]===1){
-          const x = c * CELL;
-          const y = r * CELL;
-          
-          // Draw solid core block
-          g.fillStyle(0x060618, 1);
-          g.fillRect(x + 2, y + 2, CELL - 4, CELL - 4);
-          
-          // Draw bright, glowing neon outline
-          g.lineStyle(2, 0x0088ff, 1);
-          g.strokeRect(x + 2, y + 2, CELL - 4, CELL - 4);
-          
-          // Outer subtle neon-glow shadow
-          g.lineStyle(1, 0x0044bb, 0.4);
-          g.strokeRect(x + 1, y + 1, CELL - 2, CELL - 2);
+
+    // Speed up all enemies
+    this.enemies.forEach(e => {
+      if (!e.alive) return;
+      // Apply speed multiplier to base speed
+      const baseSpeed = e.baseSpeed || e.speed;
+      e.speed = baseSpeed * Math.min(speedMultiplier, 3);
+      this.updateEnemyAI(e, dt, time);
+      this.moveEntity(e, dt);
+    });
+
+    // Bullets
+    [this.bullets, this.enemyBullets].forEach((list, isE) => {
+      for (let i = list.length - 1; i >= 0; i--) {
+        const b = list[i];
+        b.x += b.vx * dt; b.y += b.vy * dt;
+        const c = Math.floor(b.x / CELL), r = Math.floor(b.y / CELL);
+        if (b.x < 0 || b.x > MAZE_W || b.y < 0 || b.y > MAZE_H || isWall(this.maze, c, r)) {
+          b.destroy(); list.splice(i, 1);
+        }
+      }
+    });
+
+    this.handleBulletCollisions();
+
+    // Player hit by enemy bullet
+    if (this.player && this.player.alive) {
+      for (let i = this.enemyBullets.length - 1; i >= 0; i--) {
+        const b = this.enemyBullets[i];
+        if (Phaser.Math.Distance.Between(b.x, b.y, this.player.x, this.player.y) < 18) {
+          b.destroy(); this.enemyBullets.splice(i, 1);
+          this.killPlayer(); break;
         }
       }
     }
-    
-    // Warp indicators on side edges at the two mid rows (glowing purple portals)
-    const midRows=[(ROWS/2-1)|0,(ROWS/2)|0];
-    midRows.forEach(r=>{
-      [0,COLS-1].forEach(c=>{
-        const x = c * CELL + CELL/2;
-        const y = r * CELL + CELL/2;
-        const portal = this.add.circle(x, y, 16, 0xff00ff, 0.7);
-        this.mazeTiles.add(portal);
-        this.tweens.add({
-          targets: portal,
-          scale: 1.3,
-          alpha: 0.3,
-          duration: 450,
-          yoyo: true,
-          repeat: -1
-        });
-      });
-    });
-    
-    this.mazeGfx.clear();
-  }
-  isWall(c,r){if(r<0||r>=ROWS)return true;if(c<0||c>=COLS)return false;return this.maze[r][c]===1;}
-  // Find nearest open (non-wall) cell to (c,r) using BFS. Returns {c,r} or null.
-  // Used by all spawn paths so an enemy NEVER materializes inside a wall.
-  findOpenCell(c,r){
-    if(!this.isWall(c,r) && r>=0 && r<ROWS && c>=0 && c<COLS) return {c,r};
-    const seen=new Set();
-    const key=(cc,rr)=>rr*COLS+cc;
-    const q=[[c,r]]; seen.add(key(c,r));
-    while(q.length){
-      const [cc,rr]=q.shift();
-      if(rr>0 && rr<ROWS-1 && cc>0 && cc<COLS-1 && !this.isWall(cc,rr)) return {c:cc,r:rr};
-      for(const [dc,dr] of [[1,0],[-1,0],[0,1],[0,-1]]){
-        const nc=cc+dc, nr=rr+dr;
-        if(nr<=0||nr>=ROWS-1||nc<=0||nc>=COLS-1) continue;
-        const k=key(nc,nr);
-        if(seen.has(k)) continue;
-        seen.add(k); q.push([nc,nr]);
+
+    // Player contact with enemy
+    if (this.player && this.player.alive) {
+      for (const e of this.enemies) {
+        if (e.alive && Phaser.Math.Distance.Between(e.x, e.y, this.player.x, this.player.y) < 26) {
+          this.killPlayer(); break;
+        }
       }
     }
-    return null;
-  }
-  centerOf(c,r){return{x:c*CELL+CELL/2,y:r*CELL+CELL/2};}
-  isCentered(e){const cx=e.gridCol*CELL+CELL/2,cy=e.gridRow*CELL+CELL/2;return Math.abs(e.x-cx)<2&&Math.abs(e.y-cy)<2;}
-  canMove(c,r,dir){const d=DVEC[dir];const nc=c+d.x,nr=r+d.y;if(nr>=0&&nr<ROWS&&(nc<0||nc>=COLS))return[(ROWS/2-1)|0,(ROWS/2)|0].includes(nr);return!this.isWall(nc,nr);}
-  validDirs(c,r){const out=[];[DIR.LEFT,DIR.RIGHT,DIR.UP,DIR.DOWN].forEach(d=>{if(this.canMove(c,r,d))out.push(d);});return out;}
-  opposite(d){return{[DIR.LEFT]:DIR.RIGHT,[DIR.RIGHT]:DIR.LEFT,[DIR.UP]:DIR.DOWN,[DIR.DOWN]:DIR.UP,[DIR.NONE]:DIR.NONE}[d];}
 
-  update(time,delta){
-    if(this.state!=='playing')return;const dt=delta/1000;
-    
-    // Heartbeat tension soundscape
-    if(time > (this.nextBeatTime || 0)) {
-      const remCount = this.enemies.filter(e => e.alive).length;
-      const speedUp = Math.max(1, remCount);
-      const delay = 250 + Math.min(10, speedUp) * 110; // 360ms to 1350ms
-      this.nextBeatTime = time + delay;
-      this.beatToggle = !this.beatToggle;
-      const pitch = this.beatToggle ? 0.95 : 0.75;
-      this.playK('snd_radar', {rate: pitch, volume: 0.22});
+    // Backup warrior timer
+    if (this.backupActive) {
+      this.backupTimer -= dt * 1000;
+      if (this.backupTimer <= 0) {
+        // Auto-enter backup
+        if (this.player && !this.player.alive) {
+          this.player.x = this.backupX;
+          this.player.y = this.backupY;
+          this.player.gridCol = Math.floor(this.backupX / CELL);
+          this.player.gridRow = Math.floor(this.backupY / CELL);
+          this.player.dir = DIR.NONE;
+          this.player.queuedDir = DIR.NONE;
+          this.player.setVisible(true);
+          this.player.alive = true;
+          this.backupActive = false;
+          if (this.backupGroup) { this.backupGroup.destroy(); this.backupGroup = null; }
+        }
+      }
+      // Update backup box visual
+      if (this.backupGroup) {
+        this.backupGroup.children.iterate(child => {
+          if (child instanceof Phaser.GameObjects.Text) {
+            const secs = Math.ceil(this.backupTimer / 1000);
+            child.setText(secs > 0 ? 'BOX ' + secs : '!!');
+          }
+        });
+      }
     }
-    this.handleInput();
-    if(this.player&&this.player.alive)this.moveEntity(this.player,dt);
-    this.enemies.forEach(e=>{if(!e.alive)return;this.updateEnemyAI(e,dt,time);this.moveEntity(e,dt);});
-    [this.bullets,this.enemyBullets].forEach((list,isE)=>{for(let i=list.length-1;i>=0;i--){const b=list[i];b.x+=b.vx*dt;b.y+=b.vy*dt;const c=Math.floor(b.x/CELL),r=Math.floor(b.y/CELL);if(b.x<0||b.x>MAZE_W||b.y<0||b.y>MAZE_H||this.isWall(c,r)){b.destroy();list.splice(i,1);}}});
-    this.handleBulletCollisions();
-    if(this.player&&this.player.alive){for(let i=this.enemyBullets.length-1;i>=0;i--){const b=this.enemyBullets[i];if(Phaser.Math.Distance.Between(b.x,b.y,this.player.x,this.player.y)<18){b.destroy();this.enemyBullets.splice(i,1);this.killPlayer();break;}}}
-    if(this.player&&this.player.alive){for(const e of this.enemies){if(e.alive&&Phaser.Math.Distance.Between(e.x,e.y,this.player.x,this.player.y)<26){this.killPlayer();break;}}}
-    const rem=this.enemies.filter(e=>e.alive&&(e.type==='burwor'||e.type==='garwor'||e.type==='thorwor'));
-    if(rem.length===0&&!this.worlukSpawned){this.worlukSpawned=true;const m=(ROWS/2)|0;const s=this.findOpenCell(1,m);if(s)this.spawnEnemy('worluk',s.c*CELL+CELL/2,s.r*CELL+CELL/2);}
-    const wl=this.enemies.filter(e=>e.alive&&e.type==='worluk');
-    if(this.worlukSpawned&&wl.length===0&&!this.wizardSpawned){this.wizardSpawned=true;if(this.level>=2&&Math.random()<0.6){const m=(ROWS/2)|0;const s=this.findOpenCell(COLS-2,m);if(s)this.spawnEnemy('wizard',s.c*CELL+CELL/2,s.r*CELL+CELL/2);else this.nextLevel();}else this.nextLevel();}
-    const wz=this.enemies.filter(e=>e.alive&&e.type==='wizard');if(this.wizardSpawned&&wz.length===0&&this.state==='playing')this.nextLevel();
-    this.drawRadar();this.updateDebug();
-  }
 
-  handleInput(){
-    let d=DIR.NONE;
-    if(this.cursors.left.isDown)d=DIR.LEFT;else if(this.cursors.right.isDown)d=DIR.RIGHT;else if(this.cursors.up.isDown)d=DIR.UP;else if(this.cursors.down.isDown)d=DIR.DOWN;
-    if(d===DIR.NONE)d=this.touchDir;
-    if(d!==DIR.NONE)this.queuedDir=d;
-    if(this.player)this.player.queuedDir=this.queuedDir;
-  }
-
-  moveEntity(e,dt){
-    const move=e.speed*dt;
-    // Cell-anchored movement (port from Python enemy.py _move):
-    // lock the perpendicular axis to the current cell center BEFORE moving,
-    // so enemies/players can't drift diagonally off the corridor centerline.
-    const cx=e.gridCol*CELL+CELL/2, cy=e.gridRow*CELL+CELL/2;
-    if(e.dir===DIR.LEFT||e.dir===DIR.RIGHT) e.y=cy;
-    else if(e.dir===DIR.UP||e.dir===DIR.DOWN) e.x=cx;
-    if(this.isCentered(e)){
-      e.x=cx; e.y=cy;
-      if(e.queuedDir!==undefined&&e.queuedDir!==DIR.NONE&&this.canMove(e.gridCol,e.gridRow,e.queuedDir))e.dir=e.queuedDir;
-      if(!this.canMove(e.gridCol,e.gridRow,e.dir)&&e.type==='player')return;
+    // Spawn Worluk after all basic enemies dead
+    const rem = this.enemies.filter(e => e.alive && (e.type === 'burwor' || e.type === 'garwor' || e.type === 'thorwor'));
+    if (rem.length === 0 && !this.worlukSpawned) {
+      this.worlukSpawned = true;
+      const m = (ROWS/2)|0;
+      const s = this.findOpenCell(this.maze, 1, m);
+      if (s) this.spawnEnemy('worluk', s.c*CELL+CELL/2, s.r*CELL+CELL/2);
     }
-    e.x+=DVEC[e.dir].x*move;e.y+=DVEC[e.dir].y*move;
-    if(e.x<-CELL/2)e.x=MAZE_W+CELL/2;if(e.x>MAZE_W+CELL/2)e.x=-CELL/2;
-    e.gridCol=Math.floor(e.x/CELL);e.gridRow=Math.floor(e.y/CELL);if(e.gridRow<0)e.gridRow=0;if(e.gridRow>ROWS-1)e.gridRow=ROWS-1;
-    // Rotate top-view sprites to face direction of travel. Kenney robot top-view
-    // PNGs are drawn facing UP (north), so angle 0 = up.
-    // Player & wizard sprites are side-view humans — keep them upright and flip X.
-    if(e._isTopView){
-      if(e.dir===DIR.UP)    e.angle = 0;
-      else if(e.dir===DIR.RIGHT) e.angle = 90;
-      else if(e.dir===DIR.DOWN)  e.angle = 180;
-      else if(e.dir===DIR.LEFT)  e.angle = 270;
+
+    // Spawn Wizard after Worluk dead
+    const wl = this.enemies.filter(e => e.alive && e.type === 'worluk');
+    if (this.worlukSpawned && wl.length === 0 && !this.wizardSpawned) {
+      this.wizardSpawned = true;
+      if (this.level >= 2 && Math.random() < 0.6) {
+        const m = (ROWS/2)|0;
+        const s = this.findOpenCell(this.maze, COLS-2, m);
+        if (s) this.spawnEnemy('wizard', s.c*CELL+CELL/2, s.r*CELL+CELL/2);
+      } else {
+        this.nextLevel(); return;
+      }
+    }
+
+    // Wizard dead → next level
+    const wz = this.enemies.filter(e => e.alive && e.type === 'wizard');
+    if (this.wizardSpawned && wz.length === 0 && this.state === 'playing') {
+      this.nextLevel(); return;
+    }
+
+    this.drawRadar();
+  }
+
+  handleInput() {
+    let d = DIR.NONE;
+    if (this.cursors.left.isDown) d = DIR.LEFT;
+    else if (this.cursors.right.isDown) d = DIR.RIGHT;
+    else if (this.cursors.up.isDown) d = DIR.UP;
+    else if (this.cursors.down.isDown) d = DIR.DOWN;
+    if (d === DIR.NONE) d = this.touchDir;
+    if (d !== DIR.NONE) this.queuedDir = d;
+    if (this.player) this.player.queuedDir = this.queuedDir;
+  }
+
+  moveEntity(e, dt) {
+    const move = e.speed * dt;
+    const cx = e.gridCol * CELL + CELL/2;
+    const cy = e.gridRow * CELL + CELL/2;
+
+    // Lock perpendicular axis
+    if (e.dir === DIR.LEFT || e.dir === DIR.RIGHT) e.y = cy;
+    else if (e.dir === DIR.UP || e.dir === DIR.DOWN) e.x = cx;
+
+    if (this.isCentered(e)) {
+      e.x = cx; e.y = cy;
+      // 4-way joystick: tap to turn, hold to move (arcade style)
+      if (e.queuedDir !== undefined && e.queuedDir !== DIR.NONE && this.canMove(e.gridCol, e.gridRow, e.queuedDir)) {
+        e.dir = e.queuedDir;
+      }
+      if (!this.canMove(e.gridCol, e.gridRow, e.dir) && e.type === 'player') return;
+    }
+
+    e.x += DVEC[e.dir].x * move;
+    e.y += DVEC[e.dir].y * move;
+
+    // Warp tunnels
+    if (e.x < -CELL/2) e.x = MAZE_W + CELL/2;
+    if (e.x > MAZE_W + CELL/2) e.x = -CELL/2;
+
+    e.gridCol = Math.floor(e.x / CELL);
+    e.gridRow = Math.floor(e.y / CELL);
+    if (e.gridRow < 0) e.gridRow = 0;
+    if (e.gridRow > ROWS-1) e.gridRow = ROWS-1;
+
+    // Rotate top-view sprites
+    if (e._isTopView) {
+      if (e.dir === DIR.UP) e.angle = 0;
+      else if (e.dir === DIR.RIGHT) e.angle = 90;
+      else if (e.dir === DIR.DOWN) e.angle = 180;
+      else if (e.dir === DIR.LEFT) e.angle = 270;
     } else {
-      if(e.dir===DIR.LEFT)e.setFlipX(true);
-      if(e.dir===DIR.RIGHT)e.setFlipX(false);
+      if (e.dir === DIR.LEFT) e.setFlipX(true);
+      if (e.dir === DIR.RIGHT) e.setFlipX(false);
     }
-    // Keep glow halo locked to the entity position.
-    if(e._halo){ e._halo.x=e.x; e._halo.y=e.y; e._halo.setAlpha(0.18 + 0.10*Math.sin(performance.now()/250)); }
+
+    // Glow halo
+    if (e._halo) {
+      e._halo.x = e.x; e._halo.y = e.y;
+      e._halo.setAlpha(0.18 + 0.10 * Math.sin(performance.now() / 250));
+    }
   }
 
-  updateEnemyAI(e,dt,time){
-    if(e.fades){const a=0.4+0.6*Math.abs(Math.sin(time/700));e.setAlpha(a);}
-    else if(e.invisible){const dp=this.player?Phaser.Math.Distance.Between(e.x,e.y,this.player.x,this.player.y):9999;e.setAlpha(dp<80?0.4:0);}
-    if(e.teleports){e.teleportTimer-=dt*1000;if(e.teleportTimer<=0){let tries=30;while(tries-->0){const c=Phaser.Math.Between(1,COLS-2),r=Phaser.Math.Between(1,ROWS-2);if(!this.isWall(c,r)){e.gridCol=c;e.gridRow=r;e.x=c*CELL+CELL/2;e.y=r*CELL+CELL/2;this.tweens.add({targets:e,alpha:{from:0,to:1},duration:200});break;}}e.teleportTimer=Phaser.Math.Between(3000,6000);}}
-    if(e.flees){
-      // Worluk grace period: count down even before centered, so the
-      // 1.2s window doesn't get stretched by being mid-cell.
-      if(e.escapeTimer>0) e.escapeTimer=Math.max(0,e.escapeTimer-dt*1000);
-      if(this.isCentered(e)){
-        const opts=this.validDirs(e.gridCol,e.gridRow);
-        const midR=(ROWS/2)|0;
-        // Aim at the FARTHER warp tunnel (matches Python: _flee_dir picks the
-        // opposite-side warp so the player can see Worluk crossing the maze).
-        const tx=e.fleeRight?MAZE_W+CELL:-CELL;
-        const ty=midR*CELL+CELL/2;
-        opts.sort((a,b)=>Phaser.Math.Distance.Between(e.x+DVEC[a].x*CELL,e.y+DVEC[a].y*CELL,tx,ty)-Phaser.Math.Distance.Between(e.x+DVEC[b].x*CELL,e.y+DVEC[b].y*CELL,tx,ty));
-        if(opts.length)e.dir=opts[0];
-        // Only count escape after the grace window expires.
-        if(e.escapeTimer<=0 && (e.x<0||e.x>MAZE_W)){
-          this.score+=e.points; this.updateHUD(); playWorlukSound(); this.playK('snd_warp');
-          e.alive=false; if(e._halo){e._halo.destroy();e._halo=null;} e.destroy(); return;
+  updateEnemyAI(e, dt, time) {
+    // Fade effect for Garwor
+    if (e.fades) {
+      const a = 0.4 + 0.6 * Math.abs(Math.sin(time / 700));
+      e.setAlpha(a);
+    }
+    // Thorwor: fully invisible in maze (alpha=0), only visible on radar
+    if (e.invisible) {
+      e.setAlpha(0);
+    }
+
+    // Wizard teleporting
+    if (e.teleports) {
+      e.teleportTimer -= dt * 1000;
+      if (e.teleportTimer <= 0) {
+        let tries = 30;
+        while (tries-- > 0) {
+          const c = Phaser.Math.Between(1, COLS-2);
+          const r = Phaser.Math.Between(1, ROWS-2);
+          if (!this.isWall(this.maze, c, r)) {
+            e.gridCol = c; e.gridRow = r;
+            e.x = c * CELL + CELL/2; e.y = r * CELL + CELL/2;
+            this.tweens.add({ targets: e, alpha: { from: 0, to: 1 }, duration: 200 });
+            playWizardTaunt();
+            speakRobotic("Find me... The Wizard of Wor!");
+            break;
+          }
+        }
+        e.teleportTimer = Phaser.Math.Between(3000, 6000);
+      }
+    }
+
+    // Worluk: flees to warp doors
+    if (e.flees) {
+      if (e.escapeTimer > 0) e.escapeTimer = Math.max(0, e.escapeTimer - dt * 1000);
+      if (this.isCentered(e)) {
+        const opts = this.validDirs(e.gridCol, e.gridRow);
+        const midR = (ROWS/2)|0;
+        const tx = e.fleeRight ? MAZE_W + CELL : -CELL;
+        const ty = midR * CELL + CELL/2;
+        opts.sort((a, b) =>
+          Phaser.Math.Distance.Between(e.x + DVEC[a].x * CELL, e.y + DVEC[a].y * CELL, tx, ty) -
+          Phaser.Math.Distance.Between(e.x + DVEC[b].x * CELL, e.y + DVEC[b].y * CELL, tx, ty)
+        );
+        if (opts.length) e.dir = opts[0];
+        if (e.escapeTimer <= 0 && (e.x < 0 || e.x > MAZE_W)) {
+          this.score += e.points; this.updateHUD();
+          playWorlukSound(); this.playK('snd_warp');
+          e.alive = false; if (e._halo) { e._halo.destroy(); e._halo = null; }
+          e.destroy(); return;
         }
       }
       return;
     }
-    // Smart continuous corridor movement + player tracking (zero dead-ends)
-    if(this.isCentered(e) || e.dir === DIR.NONE || !this.canMove(e.gridCol, e.gridRow, e.dir)){
-      e.x = e.gridCol*CELL+CELL/2; e.y = e.gridRow*CELL+CELL/2; // Snap to center
+
+    // Standard enemies: continuous corridor movement + player tracking
+    if (this.isCentered(e) || e.dir === DIR.NONE || !this.canMove(e.gridCol, e.gridRow, e.dir)) {
+      e.x = e.gridCol * CELL + CELL/2;
+      e.y = e.gridRow * CELL + CELL/2;
+
       let opts = this.validDirs(e.gridCol, e.gridRow);
       const back = this.opposite(e.dir);
       const forward_opts = opts.filter(d => d !== back);
       const use_opts = forward_opts.length > 0 ? forward_opts : opts;
+
       let chosen_dir = null;
-      if(this.player && this.player.alive && Math.random() < 0.65){
+      if (this.player && this.player.alive && Math.random() < 0.65) {
         const dx = this.player.x - e.x;
         const dy = this.player.y - e.y;
-        const preferred = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? DIR.LEFT : DIR.RIGHT) : (dy < 0 ? DIR.UP : DIR.DOWN);
-        if(use_opts.includes(preferred)) { chosen_dir = preferred; }
+        const preferred = Math.abs(dx) > Math.abs(dy)
+          ? (dx < 0 ? DIR.LEFT : DIR.RIGHT)
+          : (dy < 0 ? DIR.UP : DIR.DOWN);
+        if (use_opts.includes(preferred)) { chosen_dir = preferred; }
       }
-      // ENEMY MOVEMENT GUARANTEE: always pick a direction (never freeze)
-    // If validDirs returned empty (trapped cell), force a random direction
-    // so the enemy at least tries to move. On next frame, canMove check
-    // will re-evaluate. This is the bulletproof fallback.
-    e.dir = chosen_dir || (use_opts.length ? Phaser.Math.RND.pick(use_opts) : Phaser.Math.RND.pick([DIR.LEFT, DIR.RIGHT, DIR.UP, DIR.DOWN]));
-    // Failsafe: if somehow dir is still NONE, force a random direction
-    if(e.dir===DIR.NONE){e.dir=Phaser.Math.RND.pick([DIR.LEFT,DIR.RIGHT,DIR.UP,DIR.DOWN]);}
+      e.dir = chosen_dir || (use_opts.length ? Phaser.Math.RND.pick(use_opts) : Phaser.Math.RND.pick([DIR.LEFT, DIR.RIGHT, DIR.UP, DIR.DOWN]));
+      if (e.dir === DIR.NONE) { e.dir = Phaser.Math.RND.pick([DIR.LEFT, DIR.RIGHT, DIR.UP, DIR.DOWN]); }
     }
-    e.fireTimer-=dt*1000;if(e.fireTimer<=0){e.fireTimer=Phaser.Math.Between(2500,6000);if(this.player&&e.type!=='wizard')this.spawnEnemyBullet(e);}
+
+    // Enemy firing
+    e.fireTimer -= dt * 1000;
+    if (e.fireTimer <= 0) {
+      e.fireTimer = Phaser.Math.Between(2500, 6000);
+      if (this.player && e.type !== 'wizard') this.spawnEnemyBullet(e);
+    }
   }
 
-  updateDebug(){
-    if(!this._debugTxt){
-      // BIG BRIGHT BANNER — impossible to miss
-      const bg=this.add.rectangle(GAME_W/2, 30, GAME_W, 50, 0x000000, 0.85).setDepth(300);
-      bg.setStrokeStyle(3, 0xff0000);
-      this._debugBg = bg;
-      this._debugTxt=this.add.text(GAME_W/2, 25, '', {fontFamily:'Press Start 2P',fontSize:'14px',color:'#00ff00',align:'center'}).setOrigin(0.5).setDepth(301);
-    }
-    const alive=this.enemies.filter(e=>e.alive);
-    let info=this.state.toUpperCase();
-    let moving=0, frozen=0;
-    alive.forEach(e=>{
-      const dn=['NONE','L','R','U','D'][e.dir]||'?';
-      info+=' '+e.type+':'+dn;
-      // Track if x/y are actually changing
+  isCentered(e) {
+    const cx = e.gridCol * CELL + CELL/2;
+    const cy = e.gridRow * CELL + CELL/2;
+    return Math.abs(e.x - cx) < 2 && Math.abs(e.y - cy) < 2;
+  }
+
+  canMove(c, r, dir) {
+    const d = DVEC[dir];
+    const nc = c + d.x, nr = r + d.y;
+    if (nr >= 0 && nr < ROWS && (nc < 0 || nc >= COLS)) return [(ROWS/2-1)|0, (ROWS/2)|0].includes(nr);
+    return !isWall(this.maze, nc, nr);
+  }
+
+  validDirs(c, r) {
+    const out = [];
+    [DIR.LEFT, DIR.RIGHT, DIR.UP, DIR.DOWN].forEach(d => {
+      if (this.canMove(c, r, d)) out.push(d);
     });
-    // Check if any enemy is truly frozen (dir=NONE)
-    const hasFrozen=alive.some(e=>e.dir===DIR.NONE);
-    if(hasFrozen){
-      info+=' | FROZEN!';
-      this._debugTxt.setColor('#ff0000');
-    } else {
-      info+=' | MOVING';
-      this._debugTxt.setColor('#00ff00');
-    }
-    this._debugTxt.setText(info);
+    return out;
   }
-  drawRadar(){const g=this.radarGfx;g.clear();const y0=MAZE_H;g.fillStyle(0x0a0a1a,1);g.fillRect(0,y0,MAZE_W,RADAR_H);g.lineStyle(2,0x00ff88,0.7);g.strokeRect(8,y0+8,MAZE_W-16,RADAR_H-16);if(!this._radarTxt)this._radarTxt=this.add.text(14,y0+10,'RADAR',{fontFamily:'Press Start 2P',fontSize:'10px',color:'#00ff88'});const ix=16,iy=y0+20,iw=MAZE_W-32,ih=RADAR_H-30;const sx=iw/MAZE_W,sy=ih/MAZE_H;
-    // Grid overlay for maze cells
-    g.lineStyle(1,0x1a2a3a,0.5);
-    for(let r=0;r<=ROWS;r++){g.lineBetween(ix,iy+r*(ih/ROWS),ix+iw,iy+r*(ih/ROWS));}
-    for(let c=0;c<=COLS;c++){g.lineBetween(ix+c*(iw/COLS),iy,ix+c*(iw/COLS),iy+ih);}
-    // Warp tunnels indicator
-    const midRows=[(ROWS/2-1)|0,(ROWS/2)|0];
-    midRows.forEach(r=>{g.fillStyle(0xff00ff,0.3);g.fillRect(ix,iy+r*(ih/ROWS),iw,ih/ROWS);});
-    if(this.player&&this.player.alive){g.fillStyle(0xffea00,1);g.fillRect(ix+this.player.x*sx-3,iy+this.player.y*sy-3,6,6);}
-    this.enemies.forEach(e=>{if(!e.alive)return;const cm={burwor:0x22dd33,garwor:0xffee00,thorwor:0x0088ff,worluk:0xffee00,wizard:0x0088ff};g.fillStyle(cm[e.type]||0xffffff,1);g.fillRect(ix+e.x*sx-2,iy+e.y*sy-2,5,5);});
-    
-    // Dynamic radar scanning sweep line
+
+  opposite(d) {
+    return { [DIR.LEFT]: DIR.RIGHT, [DIR.RIGHT]: DIR.LEFT, [DIR.UP]: DIR.DOWN, [DIR.DOWN]: DIR.UP, [DIR.NONE]: DIR.NONE }[d];
+  }
+
+  findOpenCell(maze, c, r) {
+    return findOpenCell(maze, c, r);
+  }
+
+  spawnEntity(key, x, y, props) {
+    const img = this.add.image(x, y, key);
+    img.setDisplaySize(CELL - 6, CELL - 6);
+    Object.assign(img, props);
+    img.gridCol = Math.floor(x / CELL);
+    img.gridRow = Math.floor(y / CELL);
+    img.moveCooldown = 0;
+    this.entityLayer.add(img);
+    return img;
+  }
+
+  spawnEnemy(type, x, y) {
+    const cfg = {
+      burwor: { speed: 55, visible: 1, points: 100 },
+      garwor: { speed: 75, visible: 0.6, points: 200, fades: true },
+      thorwor: { speed: 95, visible: 0, points: 500, invisible: true },
+      worluk: { speed: 140, visible: 1, points: 1000, flees: true },
+      wizard: { speed: 90, visible: 1, points: 2500, teleports: true }
+    }[type];
+
+    const fleeRight = type === 'worluk' ? (x < MAZE_W/2) : false;
+    const e = this.spawnEntity(type, x, y, {
+      type, alive: true,
+      baseSpeed: cfg.speed,
+      speed: cfg.speed,
+      dir: Phaser.Math.RND.pick([DIR.LEFT, DIR.RIGHT, DIR.UP, DIR.DOWN]),
+      points: cfg.points,
+      fades: cfg.fades || false,
+      invisible: cfg.invisible || false,
+      flees: cfg.flees || false,
+      teleports: cfg.teleports || false,
+      fireTimer: Phaser.Math.Between(2000, 6000),
+      teleportTimer: type === 'wizard' ? Phaser.Math.Between(3000, 5000) : 0,
+      escapeTimer: type === 'worluk' ? 1200 : 0,
+      fleeRight
+    });
+
+    e._isTopView = (type === 'burwor' || type === 'garwor' || type === 'thorwor' || type === 'worluk');
+
+    // Arcade colors (matching original)
+    const arcadeColors = {
+      burwor:  0x2244cc, // Blue wolf
+      garwor:  0xddaa00, // Yellow T-rex
+      thorwor: 0xcc2222, // Red scorpion
+      worluk:  0xddaa00, // Yellow insect
+      wizard:  0x2244cc  // Blue wizard
+    };
+
+    // Glow halo matching arcade colors
+    const halo = this.add.circle(x, y, CELL * 0.45, arcadeColors[type] || 0xffffff, 0.22);
+    this.entityLayer.add(halo);
+    halo.setDepth(e.depth - 1);
+    e._halo = halo;
+
+    if (type === 'worluk') { e.dir = fleeRight ? DIR.RIGHT : DIR.LEFT; playWorlukSound(); this.playK('snd_warp'); }
+    if (type === 'wizard') { playWizardTaunt(); speakRobotic("You better hope you don't find me, the Wizard of Wor!"); this.playK('snd_wizard_teleport'); }
+
+    // Thorwor: fully invisible in maze (only visible on radar)
+    if (cfg.invisible) e.setAlpha(0);
+    else if (cfg.fades) e.setAlpha(cfg.visible);
+
+    this.enemies.push(e);
+    return e;
+  }
+
+  clearAll() {
+    this.entityLayer.removeAll(true);
+    this.bullets = []; this.enemyBullets = []; this.enemies = [];
+    this.player = null;
+    this.worlukSpawned = false; this.wizardSpawned = false;
+    this.dungeonStartTime = 0;
+    this.backupActive = false; this.backupTimer = 0;
+    if (this.backupGroup) { this.backupGroup.destroy(); this.backupGroup = null; }
+  }
+
+  drawMaze() {
+    const g = this.mazeGfx;
+    g.clear();
+
+    // Floor (dark)
+    g.fillStyle(0x0a0a1a, 1);
+    g.fillRect(0, 0, MAZE_W, MAZE_H);
+
+    // Walls (bright with glow)
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (this.maze[r][c] === 1) {
+          // Wall with neon glow
+          g.fillStyle(0x1122aa, 1);
+          g.fillRect(c * CELL, r * CELL, CELL, CELL);
+          // Inner wall detail
+          g.fillStyle(0x2244cc, 1);
+          g.fillRect(c * CELL + 3, r * CELL + 3, CELL - 6, CELL - 6);
+          // Corner highlights
+          g.fillStyle(0x4466ff, 1);
+          g.fillRect(c * CELL + 3, r * CELL + 3, 3, 3);
+          g.fillRect(c * CELL + CELL - 6, r * CELL + 3, 3, 3);
+          g.fillRect(c * CELL + 3, r * CELL + CELL - 6, 3, 3);
+          g.fillRect(c * CELL + CELL - 6, r * CELL + CELL - 6, 3, 3);
+        }
+      }
+    }
+
+    // Warp tunnels (purple glow)
+    const midR1 = (ROWS/2-1)|0, midR2 = (ROWS/2)|0;
+    [midR1, midR2].forEach(r => {
+      g.fillStyle(0xff00ff, 1);
+      g.fillRect(0, r * CELL, CELL, CELL);
+      g.fillStyle(0xff44ff, 1);
+      g.fillRect(CELL - 3, r * CELL, 3, CELL);
+      g.fillStyle(0xff44ff, 1);
+      g.fillRect(MAZE_W - CELL, r * CELL, 3, CELL);
+    });
+  }
+
+  drawRadar() {
+    const g = this.radarGfx;
+    g.clear();
+    const y0 = MAZE_H;
+    g.fillStyle(0x0a0a1a, 1);
+    g.fillRect(0, y0, MAZE_W, RADAR_H);
+    g.lineStyle(2, 0x00ff88, 0.7);
+    g.strokeRect(8, y0 + 8, MAZE_W - 16, RADAR_H - 16);
+
+    if (!this._radarTxt) {
+      this._radarTxt = this.add.text(14, y0 + 10, 'RADAR', { fontFamily: 'Press Start 2P', fontSize: '10px', color: '#00ff88' });
+    }
+
+    const ix = 16, iy = y0 + 20;
+    const iw = MAZE_W - 32, ih = RADAR_H - 30;
+    const sx = iw / MAZE_W, sy = ih / MAZE_H;
+
+    // Grid overlay
+    g.lineStyle(1, 0x1a2a3a, 0.5);
+    for (let r = 0; r <= ROWS; r++) {
+      g.lineBetween(ix, iy + r * (ih / ROWS), ix + iw, iy + r * (ih / ROWS));
+    }
+    for (let c = 0; c <= COLS; c++) {
+      g.lineBetween(ix + c * (iw / COLS), iy, ix + c * (iw / COLS), iy + ih);
+    }
+
+    // Player on radar (yellow dot)
+    if (this.player && this.player.alive) {
+      g.fillStyle(0xffea00, 1);
+      g.fillRect(ix + this.player.x * sx - 3, iy + this.player.y * sy - 3, 6, 6);
+    }
+
+    // Enemies on radar (colored per type — matches arcade)
+    this.enemies.forEach(e => {
+      if (!e.alive) return;
+      const cm = {
+        burwor: 0x2244cc, // Blue square
+        garwor: 0xddaa00, // Yellow square
+        thorwor: 0xcc2222, // Red square
+        worluk: 0xddaa00, // Yellow square
+        wizard: 0xff00ff  // Purple square
+      };
+      g.fillStyle(cm[e.type] || 0xffffff, 1);
+      g.fillRect(ix + e.x * sx - 3, iy + e.y * sy - 3, 6, 6);
+    });
+
+    // Backup warrior on radar (white)
+    if (this.backupActive && this.backupGroup) {
+      g.fillStyle(0xffffff, 1);
+      g.fillRect(ix + this.backupX * sx - 3, iy + this.backupY * sy - 3, 6, 6);
+    }
+
+    // Radar sweep line
     this.radarSweepAngle = (this.radarSweepAngle || 0) + 0.04;
-    const rcx = ix + iw/2;
-    const rcy = iy + ih/2;
-    const radius = Math.max(iw, ih)/2;
+    const rcx = ix + iw / 2;
+    const rcy = iy + ih / 2;
+    const radius = Math.max(iw, ih) / 2;
     g.lineStyle(2, 0x00ff88, 0.35);
-    g.lineBetween(
-      rcx, rcy,
-      rcx + Math.cos(this.radarSweepAngle) * radius,
-      rcy + Math.sin(this.radarSweepAngle) * radius
-    );
+    g.lineBetween(rcx, rcy, rcx + Math.cos(this.radarSweepAngle) * radius, rcy + Math.sin(this.radarSweepAngle) * radius);
   }
 
-  tryFire(dirOverride){
-    if(this.state!=='playing'||!this.player||!this.player.alive)return;
-    this.bullets.forEach(b=>b.destroy());this.bullets=[];
-    const d=dirOverride||(this.player.dir===DIR.NONE?(this.player.queuedDir||DIR.RIGHT):this.player.dir);
-    const vec=DVEC[d];if(!vec||vec.x===0&&vec.y===0)return;
-    const b=this.add.image(this.player.x+vec.x*16,this.player.y+vec.y*16,'bullet');
-    b.vx=vec.x*400;b.vy=vec.y*400;if(vec.y!==0)b.angle=90;this.entityLayer.add(b);this.bullets.push(b);
-    // Prefer Kenney laser; fallback to synth chirp
-    if(this.kenneySounds && this.kenneySounds.snd_shoot) this.playK('snd_shoot');
-    else playShootSound();
+  tryFire(dirOverride) {
+    if (this.state !== 'playing' || !this.player || !this.player.alive) return;
+    // Single-shot rule (arcade accurate)
+    this.bullets.forEach(b => b.destroy()); this.bullets = [];
+
+    const d = dirOverride || (this.player.dir === DIR.NONE ? (this.player.queuedDir || DIR.RIGHT) : this.player.dir);
+    const vec = DVEC[d];
+    if (!vec || (vec.x === 0 && vec.y === 0)) return;
+
+    const b = this.add.image(this.player.x + vec.x * 16, this.player.y + vec.y * 16, 'bullet');
+    b.vx = vec.x * 400; b.vy = vec.y * 400;
+    if (vec.y !== 0) b.angle = 90;
+    this.entityLayer.add(b); this.bullets.push(b);
+
+    playShootSound();
   }
 
-  spawnEnemyBullet(e){const vec=DVEC[e.dir];if(vec.x===0&&vec.y===0)return;const b=this.add.image(e.x+vec.x*16,e.y+vec.y*16,'ebullet');b.vx=vec.x*260;b.vy=vec.y*260;if(vec.y!==0)b.angle=90;this.entityLayer.add(b);this.enemyBullets.push(b);playEnemyShootSound();}
-
-  handleBulletCollisions(){
-    for(let i=this.bullets.length-1;i>=0;i--){const b=this.bullets[i];let hit=false;
-      for(const e of this.enemies){if(!e.alive)continue;if(Phaser.Math.Distance.Between(b.x,b.y,e.x,e.y)<22){// Worluk Double Score logic (Even levels have active Worluk double-score bonus)
-      const isWorlukLevel = this.worlukSpawned && !this.wizardSpawned;
-      const pointsAwarded = (isWorlukLevel && e.type === 'worluk') ? (e.points * 2) : e.points;
-      this.score += pointsAwarded;
-      this.updateHUD();
-      this.explodeAt(e.x,e.y,pointsAwarded);
-      if(isWorlukLevel && e.type === 'worluk') {
-        const doubleTxt = this.add.text(MAZE_W/2, MAZE_H/2 - 50, 'DOUBLE SCORE BONUS!', {
-          fontFamily: '"Press Start 2P"', fontSize: '18px', color: '#ffea00'
-        }).setOrigin(0.5).setDepth(200);
-        this.tweens.add({ targets: doubleTxt, scale: 1.4, alpha: 0, duration: 1500, onComplete: () => doubleTxt.destroy() });
-      }e.alive=false;if(e._halo){e._halo.destroy();e._halo=null;}e.destroy();hit=true;break;}}
-      if(!hit)for(let j=this.enemyBullets.length-1;j>=0;j--){const eb=this.enemyBullets[j];if(Phaser.Math.Distance.Between(b.x,b.y,eb.x,eb.y)<12){eb.destroy();this.enemyBullets.splice(j,1);hit=true;break;}}
-      if(hit){b.destroy();this.bullets.splice(i,1);}
-    }
+  spawnEnemyBullet(e) {
+    const vec = DVEC[e.dir];
+    if (vec.x === 0 && vec.y === 0) return;
+    const b = this.add.image(e.x + vec.x * 16, e.y + vec.y * 16, 'ebullet');
+    b.vx = vec.x * 260; b.vy = vec.y * 260;
+    if (vec.y !== 0) b.angle = 90;
+    this.entityLayer.add(b); this.enemyBullets.push(b);
+    playEnemyShootSound();
   }
 
-  explodeAt(x,y,points){
-    // Floating points popup
-    if(points) {
-      const txt = this.add.text(x, y - 16, '+' + points, {fontFamily: '"Press Start 2P"', fontSize: '11px', color: '#ffea00'});
-      txt.setOrigin(0.5);
-      txt.setDepth(100);
-      this.tweens.add({
-        targets: txt,
-        y: y - 48,
-        alpha: 0,
-        duration: 650,
-        onComplete: () => txt.destroy()
-      });
-    }
+  handleBulletCollisions() {
+    for (let i = this.bullets.length - 1; i >= 0; i--) {
+      const b = this.bullets[i];
+      let hit = false;
 
-    // Kenney pixel explosion: 9 frames played back over ~450ms.
-    // We still draw a flash + particle ring on top of the spritesheet for
-    // extra punch — the Kenney explosion is large but visually subtle.
-    this.playK('snd_explosion');
-    // Fallback synth (in case Kenney audio failed to load)
-    if(!this.kenneySounds || !this.kenneySounds.snd_explosion) playExplosionSound();
+      for (const e of this.enemies) {
+        if (!e.alive) continue;
+        if (Phaser.Math.Distance.Between(b.x, b.y, e.x, e.y) < 22) {
+          // Double score: if Worluk was killed on a level that spawned him
+          const isDoubleScore = this.worlukSpawned && !this.wizardSpawned;
+          const pointsAwarded = (isDoubleScore && e.type === 'worluk') ? (e.points * 2) : e.points;
+          this.score += pointsAwarded;
+          this.updateHUD();
+          this.explodeAt(e.x, e.y, pointsAwarded);
 
-    // Animated explosion frames
-    if(this.textures.exists('exp_0')){
-      const sprite=this.add.image(x,y,'exp_0').setDepth(50);
-      sprite.setScale(0.7);
-      this.entityLayer.add(sprite);
-      let frame=0;
-      const total=9;
-      const interval=this.time.addEvent({
-        delay:50,
-        repeat:total-1,
-        callback:()=>{
-          frame++;
-          if(frame<total && this.textures.exists('exp_'+frame)){
-            sprite.setTexture('exp_'+frame);
+          // Double score banner
+          if (isDoubleScore && e.type === 'worluk') {
+            const doubleTxt = this.add.text(MAZE_W/2, MAZE_H/2 - 50, 'DOUBLE SCORE BONUS!', {
+              fontFamily: 'Press Start 2P', fontSize: '18px', color: '#ffea00'
+            }).setOrigin(0.5).setDepth(200);
+            this.tweens.add({ targets: doubleTxt, scale: 1.4, alpha: 0, duration: 1500, onComplete: () => doubleTxt.destroy() });
+          }
+
+          e.alive = false;
+          if (e._halo) { e._halo.destroy(); e._halo = null; }
+          e.destroy();
+          hit = true; break;
+        }
+      }
+
+      if (!hit) {
+        for (let j = this.enemyBullets.length - 1; j >= 0; j--) {
+          const eb = this.enemyBullets[j];
+          if (Phaser.Math.Distance.Between(b.x, b.y, eb.x, eb.y) < 12) {
+            eb.destroy(); this.enemyBullets.splice(j, 1); hit = true; break;
           }
         }
-      });
-      this.tweens.add({targets:sprite,alpha:{from:1,to:0},scale:1.2,duration:total*50,onComplete:()=>{sprite.destroy();interval.remove();}});
-    } else {
-      // Fallback: original procedural flash
-      const flash=this.add.circle(x,y,12,0xffffaa);
-      this.entityLayer.add(flash);
-      this.tweens.add({targets:flash,scale:3.5,alpha:0,duration:380,onComplete:()=>flash.destroy()});
-    }
-    // Particle burst (always on top)
-    for(let i=0;i<14;i++){
-      const p=this.add.circle(x,y,Phaser.Math.Between(2,5),Phaser.Math.RND.pick([0xffaa00,0xff6600,0xffdd44,0xffffff]));
-      this.entityLayer.add(p);
-      const ang=(i/14)*Math.PI*2+Phaser.Math.FloatBetween(-0.4,0.4);
-      const spd=Phaser.Math.Between(80,180);
-      const vx=Math.cos(ang)*spd,vy=Math.sin(ang)*spd;
-      this.tweens.add({targets:p,x:x+vx*0.6,y:y+vy*0.6,alpha:0,scale:0.2,duration:Phaser.Math.Between(420,720),onComplete:()=>p.destroy()});
+      }
+
+      if (hit) { b.destroy(); this.bullets.splice(i, 1); }
     }
   }
 
-  killPlayer(){if(this.state!=='playing')return;this.state='dying';this.explodeAt(this.player.x,this.player.y);this.playK('snd_hurt');this.player.alive=false;this.player.setVisible(false);this.lives--;this.updateHUD();this.time.delayedCall(900,()=>{if(this.lives<0)this.gameOver();else{const safe=this.findOpenCell((COLS/2)|0,ROWS-3)||{c:1,r:(ROWS/2)|0};const px=safe.c*CELL+CELL/2,py=safe.r*CELL+CELL/2;this.player.x=px;this.player.y=py;this.player.gridCol=safe.c;this.player.gridRow=safe.r;this.player.dir=DIR.NONE;this.player.queuedDir=DIR.NONE;this.queuedDir=DIR.NONE;this.player.setVisible(true);this.player.alive=true;this.state='playing';}});}
-  nextLevel(){
-    if(this.state!=='playing')return;
-    this.state='levelEnd';
+  explodeAt(x, y, points) {
+    // Floating points popup
+    if (points) {
+      const txt = this.add.text(x, y - 16, '+' + points, { fontFamily: 'Press Start 2P', fontSize: '11px', color: '#ffea00' });
+      txt.setOrigin(0.5); txt.setDepth(100);
+      this.tweens.add({ targets: txt, y: y - 48, alpha: 0, duration: 650, onComplete: () => txt.destroy() });
+    }
+
+    // Explosion animation (pixel art)
+    const exp = this.add.image(x, y, 'explosion');
+    exp.setDisplaySize(CELL, CELL);
+    this.entityLayer.add(exp);
+    this.tweens.add({
+      targets: exp, scale: 0, alpha: 0, duration: 400,
+      onComplete: () => exp.destroy()
+    });
+
+    playExplosionSound();
+  }
+
+  killPlayer() {
+    if (this.state !== 'playing') return;
+    this.state = 'dying';
+    this.explodeAt(this.player.x, this.player.y);
+    playHurtSound();
+    this.player.alive = false;
+    this.player.setVisible(false);
+    this.lives--;
+    this.updateHUD();
+
+    // Backup warrior mechanic (arcade accurate)
+    const safe = this.findOpenCell(this.maze, (COLS/2)|0, ROWS-3) || { c: 1, r: (ROWS/2)|0 };
+    const px = safe.c * CELL + CELL/2;
+    const py = safe.r * CELL + CELL/2;
+    this.backupX = px; this.backupY = py;
+    this.backupActive = true;
+    this.backupTimer = 10000; // 10 seconds
+
+    // Draw backup box
+    if (this.backupGroup) this.backupGroup.destroy();
+    this.backupGroup = this.add.container(px, py).setDepth(15);
+    const box = this.add.image(0, 0, 'backup').setDisplaySize(CELL, CELL);
+    this.backupGroup.add(box);
+    const timerTxt = this.add.text(0, 0, '10', { fontFamily: 'Press Start 2P', fontSize: '10px', color: '#ffaa00' })
+      .setOrigin(0.5);
+    this.backupGroup.add(timerTxt);
+
+    // Glow
+    const glow = this.add.circle(0, 0, CELL * 0.5, 0xffaa00, 0.3);
+    this.backupGroup.add(glow);
+
+    this.time.delayedCall(900, () => {
+      if (this.lives < 0) { this.gameOver(); return; }
+      // Player respawns from backup
+      this.player.x = px; this.player.y = py;
+      this.player.gridCol = safe.c; this.player.gridRow = safe.r;
+      this.player.dir = DIR.NONE; this.player.queuedDir = DIR.NONE;
+      this.queuedDir = DIR.NONE;
+      this.player.setVisible(true);
+      this.player.alive = true;
+      this.state = 'playing';
+      this.backupActive = false;
+      if (this.backupGroup) { this.backupGroup.destroy(); this.backupGroup = null; }
+    });
+  }
+
+  nextLevel() {
+    if (this.state !== 'playing') return;
+    this.state = 'levelEnd';
     this.playK('snd_dungeon_clear');
-    
-    // Create animated Dungeon Cleared overlay
+
     const overlay = this.add.container(0, 0).setDepth(200);
     const bg = this.add.rectangle(MAZE_W/2, MAZE_H/2, MAZE_W, MAZE_H, 0x000000, 0.85);
-    const txt = this.add.text(MAZE_W/2, MAZE_H/2, `DUNGEON ${this.level}\nCLEANSED!`, {
-      fontFamily: '"Press Start 2P"',
-      fontSize: '22px',
-      color: '#00ff88',
-      align: 'center',
-      lineSpacing: 14
+    overlay.add(bg);
+
+    const isDoubleScore = this.worlukSpawned && !this.wizardSpawned;
+    const levelName = (this.level === 6) ? 'THE ARENA' : (this.level >= 13 && (this.level - 13) % 6 === 0 ? 'THE PIT' : 'DUNGEON ' + this.level);
+
+    let txt = this.add.text(MAZE_W/2, MAZE_H/2, levelName + (isDoubleScore ? '\nDOUBLE SCORE!' : ''), {
+      fontFamily: 'Press Start 2P', fontSize: '16px', color: isDoubleScore ? '#ffea00' : '#00ff88',
+      align: 'center', lineSpacing: 14
     }).setOrigin(0.5);
-    overlay.add([bg, txt]);
-    
-    // Blink effect
-    this.tweens.add({
-      targets: txt,
-      alpha: 0.3,
-      duration: 150,
-      yoyo: true,
-      repeat: 8
-    });
-    
-    this.level++;
-    this.updateHUD();
-    
-    this.time.delayedCall(2200, () => {
+    overlay.add(txt);
+
+    this.tweens.add({ targets: txt, scale: 1.4, duration: 2000, yoyo: true, repeat: 1 });
+
+    this.time.delayedCall(3000, () => {
       overlay.destroy();
+      this.level++;
       this.startLevel();
     });
   }
-  gameOver(){
-    this.state='gameover';
+
+  gameOver() {
+    if (this.state !== 'playing') return;
+    this.state = 'gameover';
     this.playK('snd_gameover');
-    
-    // Persist High Score
-    const currentHigh = parseInt(localStorage.getItem('wow_high_score') || '0', 10);
-    let isNew = false;
-    if(this.score > currentHigh) {
-      localStorage.setItem('wow_high_score', this.score.toString());
-      isNew = true;
-    }
-    
-    const finalScoreEl = document.getElementById('finalScore');
-    finalScoreEl.innerHTML = `SCORE: ${this.score}<br><span style="color:#ffea00; font-size:10px;">${isNew ? 'NEW HIGH SCORE!' : 'HIGH SCORE: ' + Math.max(this.score, currentHigh)}</span>`;
+
+    document.getElementById('finalScore').textContent = 'SCORE: ' + this.score;
+    document.getElementById('finalLevel').textContent = 'DUNGEON: ' + this.level;
     document.getElementById('gameOverScreen').classList.remove('hidden');
+  }
+
+  updateHUD() {
+    document.getElementById('score').textContent = this.score;
+    document.getElementById('lives').textContent = this.lives;
+    document.getElementById('level').textContent = this.level;
+  }
+
+  _begin() {
+    document.getElementById('startScreen').classList.add('hidden');
+    document.getElementById('gameOverScreen').classList.add('hidden');
+    this.score = 0; this.lives = 3; this.level = 1;
+    this.updateHUD();
+    speakRobotic("WARRIOR! PREPARE FOR BATTLE!");
+    this.startLevel();
+  }
+
+  startLevel() {
+    this.clearAll();
+    this.maze = generateMaze(this.level);
+    this.drawMaze();
+
+    // Play Dragnet theme (5-note opening)
+    playDragnetTheme();
+
+    const midR = (ROWS/2)|0;
+
+    // Player spawn
+    let pCol = (COLS/2)|0, pRow = ROWS-3;
+    const pSafe = this.findOpenCell(this.maze, pCol, pRow);
+    if (pSafe) { pCol = pSafe.c; pRow = pSafe.r; }
+    const px = pCol * CELL + CELL/2, py = pRow * CELL + CELL/2;
+    this.player = this.spawnEntity('player', px, py, { type: 'player', speed: 120, baseSpeed: 120, dir: DIR.NONE, alive: true });
+
+    // Enemy spawning (max 6 on screen at once — arcade accurate)
+    const enemyCount = Math.min(6 + this.level, 10);
+    const types = [];
+    for (let i = 0; i < enemyCount; i++) {
+      const r = Math.random();
+      if (this.level >= 3 && r < 0.2) types.push('thorwor');
+      else if (this.level >= 2 && r < 0.45) types.push('garwor');
+      else types.push('burwor');
+    }
+
+    // Canonical spawn positions (arcade accurate)
+    const sp = [[2, 2], [2, 6], [2, 10], [2, 14], [2, 18], [4, 4], [4, 18], [midR, 2], [midR, COLS-3]];
+    types.forEach((t, i) => {
+      const p = sp[i % sp.length];
+      const safe = this.findOpenCell(this.maze, p[1], p[0]);
+      if (!safe) return;
+      this.spawnEnemy(t, safe.c * CELL + CELL/2, safe.r * CELL + CELL/2);
+    });
+
+    this.worlukSpawned = false; this.wizardSpawned = false;
+    this.state = 'playing';
   }
 }
 
-const config={type:Phaser.AUTO,parent:'phaserWrap',width:GAME_W,height:GAME_H,backgroundColor:'#000',scale:{mode:Phaser.Scale.FIT,autoCenter:Phaser.Scale.CENTER_BOTH},scene:[GameScene]};
-const game=new Phaser.Game(config);
+// ============================================================
+// PHASER CONFIG + INIT
+// ============================================================
+
+const config = {
+  type: Phaser.AUTO,
+  parent: 'phaserWrap',
+  width: GAME_W,
+  height: GAME_H,
+  backgroundColor: '#000',
+  scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+  scene: [GameScene]
+};
+
+const game = new Phaser.Game(config);
 
 // ============================================================
-// TWIN D-PAD CONTROLS — iOS-hardened touch system
+// START SCREEN
 // ============================================================
-// DESIGN NOTES (why this looks the way it does):
-//
-// The previous per-pointer Map + pointer-events approach stopped responding
-// on iPhone after ~30 seconds of intense play. Root causes on iOS Safari:
-//
-//  1. Pointer events on iOS are unreliable under load: pointerup/pointercancel
-//     can be coalesced or dropped entirely, leaving stuck entries in the Map.
-//  2. setPointerCapture() can prevent a finger sliding between adjacent
-//     buttons from ever triggering the new button's pointerdown.
-//  3. Having BOTH pointer and touch handlers on the same element causes
-//     double-bookkeeping that drifts over time.
-//
-// New design:
-//   - Pure touch events (NO pointer events, NO pointer capture).
-//   - Listeners attached at the PAD container level — finger movement between
-//     buttons is tracked via elementFromPoint() so sliding works naturally.
-//   - Single source of truth: `activeTouches` Map<identifier, {kind,dir,el}>.
-//   - touchcancel + global document-level safety-net listeners catch any
-//     dropped end events.
-//   - visibilitychange / pagehide / blur all flush state.
-//   - Periodic watchdog rebuilds direction state from the Map every frame.
-// ============================================================
-document.addEventListener('DOMContentLoaded',()=>{
-  const getScene=()=>window._gameScene;
-  const now=()=>performance.now();
 
-  // identifier -> { kind:'move'|'fire'|'stop', dir, el, lastTs }
-  // lastTs is updated on every touchstart/touchmove for that identifier so
-  // the watchdog can reap orphans whose touchend was dropped by iOS.
-  const activeTouches=new Map();
-  let fireRepeatTimer=null;
-
-  // Orphan reaping thresholds.
-  // STALE_MS: if no touch event referenced this identifier for this long, it's
-  //   almost certainly a dropped touchend — release it.
-  // MAX_TOUCHES: defensive sanity cap. If we ever exceed this (we shouldn't —
-  //   typical play uses 2 fingers), something is deeply wrong; flush all.
-  const STALE_MS=4000;
-  const MAX_TOUCHES=10;
-
-  // Direction → button-id lookups
-  const MOVE_DIRS={'move-up':DIR.UP,'move-down':DIR.DOWN,'move-left':DIR.LEFT,'move-right':DIR.RIGHT};
-  const FIRE_DIRS={'fire-up':DIR.UP,'fire-down':DIR.DOWN,'fire-left':DIR.LEFT,'fire-right':DIR.RIGHT};
-
-  // Annotate buttons with kind+dir for fast classification.
-  Object.entries(MOVE_DIRS).forEach(([id,d])=>{const el=document.getElementById(id);if(el){el.dataset.kind='move';el.dataset.dir=d;}});
-  Object.entries(FIRE_DIRS).forEach(([id,d])=>{const el=document.getElementById(id);if(el){el.dataset.kind='fire';el.dataset.dir=d;}});
-  const stopEl=document.getElementById('move-stop');
-  if(stopEl){stopEl.dataset.kind='stop';}
-
-  // Given a screen coord, walk the element hierarchy looking for one of our
-  // tagged buttons. (elementFromPoint may return a child SVG/text node.)
-  function buttonAt(x,y){
-    let el=document.elementFromPoint(x,y);
-    while(el && el!==document.body){
-      if(el.dataset && el.dataset.kind) return el;
-      el=el.parentElement;
+function startBegin() {
+  document.getElementById('startScreen').classList.add('hidden');
+  (function tryB(n) {
+    if (window._gameScene && window._gameScene._begin) {
+      window._gameScene._begin(); return;
     }
-    return null;
-  }
+    if (n > 50) return;
+    setTimeout(() => tryB(n + 1), 100);
+  })(0);
+}
 
-  function setPressedVisual(el,on){
-    if(!el)return;
-    if(on) el.classList.add('held'); else el.classList.remove('held');
-  }
-
-  // Rebuild scene direction state from activeTouches (last 'move' wins).
-  function syncSceneFromTouches(){
-    const s=getScene();if(!s)return;
-    let last=DIR.NONE;
-    for(const t of activeTouches.values()) if(t.kind==='move') last=t.dir;
-    s.touchDir=last;
-  }
-
-  function doStop(){
-    const s=getScene();if(!s)return;
-    s.touchDir=DIR.NONE; s.queuedDir=DIR.NONE;
-    if(s.player){
-      s.player.queuedDir=DIR.NONE; s.player.dir=DIR.NONE;
-      s.player.x=s.player.gridCol*CELL+CELL/2;
-      s.player.y=s.player.gridRow*CELL+CELL/2;
-    }
-  }
-
-  function doFire(dir){
-    const s=getScene();if(s) s.tryFire(dir);
-  }
-
-  // Called when a touch enters/changes-to/leaves a button.
-  function acquire(identifier,btn){
-    if(!btn){release(identifier);return;}
-    const prev=activeTouches.get(identifier);
-    if(prev && prev.el===btn){ prev.lastTs=now(); return; } // refresh & no change
-    if(prev) setPressedVisual(prev.el,false);
-    const kind=btn.dataset.kind;
-    const dir=btn.dataset.dir?parseInt(btn.dataset.dir,10):DIR.NONE;
-    activeTouches.set(identifier,{kind,dir,el:btn,lastTs:now()});
-    setPressedVisual(btn,true);
-    if(kind==='stop') doStop();
-    else if(kind==='fire') doFire(dir);
-    syncSceneFromTouches();
-  }
-
-  function release(identifier){
-    const prev=activeTouches.get(identifier);
-    if(!prev)return;
-    setPressedVisual(prev.el,false);
-    activeTouches.delete(identifier);
-    syncSceneFromTouches();
-  }
-
-  // Reconcile our Map against the browser's authoritative active-touch list
-  // (`e.touches` is the current full set of touches on the document). Any
-  // identifier we own that isn't in that set has had its touchend dropped —
-  // release it. This is the single most important defense against the iOS
-  // "controls die after 30-45s" failure mode.
-  function reconcileWithEvent(e){
-    if(!e || !e.touches) return;
-    // Build a Set of live identifiers from the event.
-    const live=new Set();
-    for(let i=0;i<e.touches.length;i++) live.add(e.touches[i].identifier);
-    // Release any of our tracked TOUCH identifiers (>=0) not in the live set.
-    // Negative identifiers are reserved for mouse fallback — don't reap them.
-    const toRelease=[];
-    for(const id of activeTouches.keys()){
-      if(id>=0 && !live.has(id)) toRelease.push(id);
-    }
-    for(const id of toRelease) release(id);
-  }
-
-  // Continuous fire-on-hold: while any 'fire' touch is held, pulse tryFire
-  // every 180ms. The cooldown inside tryFire prevents spam.
-  function ensureFireTimer(){
-    if(fireRepeatTimer)return;
-    fireRepeatTimer=setInterval(()=>{
-      for(const t of activeTouches.values())
-        if(t.kind==='fire') doFire(t.dir);
-    },180);
-  }
-
-  // === Container-level touch listeners (movement pad + fire pad) ===
-  // Listening at the pad level (instead of per-button) means finger-slides
-  // between buttons work correctly and we can never lose a touchend that
-  // happens outside the originating button.
-  function bindPad(pad){
-    if(!pad)return;
-    pad.addEventListener('touchstart',e=>{
-      e.preventDefault();
-      for(const t of e.changedTouches){
-        acquire(t.identifier,buttonAt(t.clientX,t.clientY));
-      }
-      reconcileWithEvent(e);
-      ensureFireTimer();
-    },{passive:false});
-    pad.addEventListener('touchmove',e=>{
-      e.preventDefault();
-      for(const t of e.changedTouches){
-        // Only re-target if we already own this identifier — otherwise it
-        // belongs to a non-pad gesture and we shouldn't hijack it.
-        if(activeTouches.has(t.identifier)){
-          acquire(t.identifier,buttonAt(t.clientX,t.clientY));
-        }
-      }
-      reconcileWithEvent(e);
-    },{passive:false});
-    const endHandler=e=>{
-      // Don't preventDefault on end — iOS sometimes needs the natural end
-      // to clean up its own internal state.
-      for(const t of e.changedTouches) release(t.identifier);
-      reconcileWithEvent(e);
-    };
-    pad.addEventListener('touchend',endHandler);
-    pad.addEventListener('touchcancel',endHandler);
-
-    // --- Mouse fallback (desktop / trackpad / stylus without touch).
-    // Mirrors the touch contract using a single reserved identifier per pad
-    // so it routes through the same acquire/release/syncSceneFromTouches path.
-    // Without this, desktop users see directional buttons completely frozen
-    // after pressing START — keyboard still works, but on-screen taps do not.
-    const MOUSE_ID = pad.id==='firePad' ? -2 : -1;
-    let mouseDown = false;
-    pad.addEventListener('mousedown',e=>{
-      e.preventDefault();
-      mouseDown = true;
-      acquire(MOUSE_ID, buttonAt(e.clientX, e.clientY));
-      ensureFireTimer();
-    });
-    pad.addEventListener('mousemove',e=>{
-      if(!mouseDown) return;
-      e.preventDefault();
-      acquire(MOUSE_ID, buttonAt(e.clientX, e.clientY));
-    });
-    const mouseEnd = ()=>{ if(mouseDown){ mouseDown=false; release(MOUSE_ID); } };
-    pad.addEventListener('mouseup', mouseEnd);
-    pad.addEventListener('mouseleave', mouseEnd);
-    // Global mouseup safety-net — if user releases off-pad, still clear state.
-    document.addEventListener('mouseup', mouseEnd, true);
-  }
-  bindPad(document.getElementById('movePad'));
-  bindPad(document.getElementById('firePad'));
-
-  // === Document-level safety net ===
-  // If a touchend/touchcancel ever escapes the pad (e.g. the user lifts
-  // their finger while it has slid off the pad area, or iOS dispatches the
-  // end event to a different target during scroll cancellation), still
-  // release the touch so we can't accumulate stuck entries.
-  document.addEventListener('touchend',e=>{
-    for(const t of e.changedTouches) if(activeTouches.has(t.identifier)) release(t.identifier);
-    reconcileWithEvent(e);
-  },true);
-  document.addEventListener('touchcancel',e=>{
-    for(const t of e.changedTouches) if(activeTouches.has(t.identifier)) release(t.identifier);
-    reconcileWithEvent(e);
-  },true);
-  // Also reconcile on any document-level touchstart/touchmove — catches the
-  // case where a finger lifted silently and then a NEW finger comes down,
-  // so we use the new event's authoritative `e.touches` snapshot to evict
-  // the stuck identifier before it can desync direction state.
-  document.addEventListener('touchstart',e=>{ reconcileWithEvent(e); },true);
-  document.addEventListener('touchmove',e=>{ reconcileWithEvent(e); },true);
-
-  // === Lifecycle cleanup ===
-  // If the tab goes background or the window loses focus, flush ALL touch
-  // state. iOS aggressively suspends touch dispatch during these events
-  // and we'd otherwise come back with stale active touches forever.
-  function flushAll(){
-    for(const t of activeTouches.values()) setPressedVisual(t.el,false);
-    activeTouches.clear();
-    const s=getScene(); if(s){ s.touchDir=DIR.NONE; }
-  }
-  document.addEventListener('visibilitychange',()=>{if(document.hidden) flushAll();});
-  window.addEventListener('pagehide',flushAll);
-  window.addEventListener('blur',flushAll);
-
-  // === Watchdogs (multi-layer) ===
-  //
-  // Layer 1 — every-frame scene sync (rAF):
-  //   Game logic respawns / scene transitions can clobber `scene.touchDir`
-  //   between our event callbacks. Re-asserting it every frame guarantees
-  //   that whatever the player's finger is actually doing wins within a
-  //   single frame of any clobber. This is what makes the controls "feel"
-  //   responsive indefinitely.
-  //
-  // Layer 2 — 250ms stale-touch reaper:
-  //   Reaps any identifier whose lastTs is older than STALE_MS. Dropped
-  //   touchends on iOS would otherwise leave a phantom "finger" forever
-  //   pinning a direction. 250ms keeps the recovery time imperceptible.
-  //
-  // Layer 3 — sanity cap:
-  //   If MAX_TOUCHES is exceeded we are catastrophically desynced; flush.
-  function rafSync(){
-    if(activeTouches.size===0){
-      const s=getScene(); if(s && s.touchDir!==DIR.NONE) s.touchDir=DIR.NONE;
-    } else {
-      syncSceneFromTouches();
-    }
-    requestAnimationFrame(rafSync);
-  }
-  requestAnimationFrame(rafSync);
-
-  setInterval(()=>{
-    const t=now();
-    // Reap stale touches (lastTs older than STALE_MS). Only touch identifiers
-    // (>=0); mouse fallback identifiers are managed explicitly elsewhere and
-    // don't update lastTs aggressively.
-    const stale=[];
-    for(const [id,info] of activeTouches.entries()){
-      if(id>=0 && (t-info.lastTs)>STALE_MS) stale.push(id);
-    }
-    for(const id of stale) release(id);
-
-    // Catastrophic sanity check.
-    if(activeTouches.size>MAX_TOUCHES) flushAll();
-
-    // Belt-and-suspenders: if Map is empty, force scene to NONE; if not,
-    // re-sync. (The rAF loop also does this, but having an independent
-    // interval-based check survives a paused rAF queue, e.g. while the
-    // tab is throttled.)
-    if(activeTouches.size===0){
-      const s=getScene(); if(s && s.touchDir!==DIR.NONE) s.touchDir=DIR.NONE;
-    } else {
-      syncSceneFromTouches();
-    }
-  },250);
-
-  // Load and display high score
-  const high = localStorage.getItem('wow_high_score') || '0';
-  const display = document.getElementById('highScoreDisplay');
-  if(display) display.textContent = 'HIGH SCORE: ' + high;
-
-  // Start / Restart
-  function startBegin(){document.getElementById('startScreen').classList.add('hidden');(function tryB(n){if(window._gameScene&&window._gameScene._begin){window._gameScene._begin();return;}if(n>50)return;setTimeout(()=>tryB(n+1),100);})(0);}
-  document.getElementById('startBtn').addEventListener('click',startBegin);
-  document.getElementById('startBtn').addEventListener('touchend',e=>{e.preventDefault();startBegin();});
-  document.getElementById('restartBtn').addEventListener('click',()=>{document.getElementById('gameOverScreen').classList.add('hidden');if(window._gameScene&&window._gameScene._begin)window._gameScene._begin();});
-  document.getElementById('restartBtn').addEventListener('touchend',e=>{e.preventDefault();document.getElementById('gameOverScreen').classList.add('hidden');if(window._gameScene&&window._gameScene._begin)window._gameScene._begin();});
-
-  // Auto-start hook (used by headless E2E tests / asset previews).
-  // Add ?auto=1 to the URL to skip the splash screen.
-  if(new URLSearchParams(location.search).get('auto')==='1'){
-    setTimeout(startBegin, 1500);
-  }
-});
 </script>
 </body>
 </html>
