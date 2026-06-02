@@ -141,6 +141,7 @@
 
   <div id="startScreen" class="overlay">
     <h1>WIZARD<br>OF WOR</h1>
+    <div id="highScoreDisplay" style="font-size:10px; color:#ffea00; margin-top:-10px;">HIGH SCORE: 0</div>
     <div class="legend">
       <div><span style="background:#22dd33"></span>BURWOR — 100 pts</div>
       <div><span style="background:#dd3322"></span>GARWOR — 200 pts (fades)</div>
@@ -452,7 +453,13 @@ class GameScene extends Phaser.Scene {
 
   updateHUD(){document.getElementById('score').textContent=this.score;document.getElementById('lives').textContent=this.lives;document.getElementById('level').textContent=this.level;}
 
-  _begin(){document.getElementById('startScreen').classList.add('hidden');document.getElementById('gameOverScreen').classList.add('hidden');this.score=0;this.lives=3;this.level=1;this.updateHUD();this.startLevel();}
+  _begin(){
+    document.getElementById('startScreen').classList.add('hidden');
+    document.getElementById('gameOverScreen').classList.add('hidden');
+    this.score=0;this.lives=3;this.level=1;
+    this.updateHUD();
+    this.startLevel();
+  }
   startLevel(){
     this.clearAll();this.maze=generateMaze(this.level);this.drawMaze();
     const midR=(ROWS/2)|0;
@@ -565,6 +572,17 @@ class GameScene extends Phaser.Scene {
 
   update(time,delta){
     if(this.state!=='playing')return;const dt=delta/1000;
+    
+    // Heartbeat tension soundscape
+    if(time > (this.nextBeatTime || 0)) {
+      const remCount = this.enemies.filter(e => e.alive).length;
+      const speedUp = Math.max(1, remCount);
+      const delay = 250 + Math.min(10, speedUp) * 110; // 360ms to 1350ms
+      this.nextBeatTime = time + delay;
+      this.beatToggle = !this.beatToggle;
+      const pitch = this.beatToggle ? 0.95 : 0.75;
+      this.playK('snd_radar', {rate: pitch, volume: 0.22});
+    }
     this.handleInput();
     if(this.player&&this.player.alive)this.moveEntity(this.player,dt);
     this.enemies.forEach(e=>{if(!e.alive)return;this.updateEnemyAI(e,dt,time);this.moveEntity(e,dt);});
@@ -649,7 +667,29 @@ class GameScene extends Phaser.Scene {
     e.fireTimer-=dt*1000;if(e.fireTimer<=0){e.fireTimer=Phaser.Math.Between(2500,6000);if(this.player&&e.type!=='wizard')this.spawnEnemyBullet(e);}
   }
 
-  drawRadar(){const g=this.radarGfx;g.clear();const y0=MAZE_H;g.fillStyle(0x111122,1);g.fillRect(0,y0,MAZE_W,RADAR_H);g.lineStyle(2,0x00ff88,0.7);g.strokeRect(8,y0+8,MAZE_W-16,RADAR_H-16);if(!this._radarTxt)this._radarTxt=this.add.text(14,y0+10,'RADAR',{fontFamily:'Press Start 2P',fontSize:'10px',color:'#00ff88'});const ix=16,iy=y0+20,iw=MAZE_W-32,ih=RADAR_H-30;const sx=iw/MAZE_W,sy=ih/MAZE_H;if(this.player&&this.player.alive){g.fillStyle(0xffea00,1);g.fillRect(ix+this.player.x*sx-2,iy+this.player.y*sy-2,5,5);}this.enemies.forEach(e=>{if(!e.alive)return;const cm={burwor:0x22dd33,garwor:0xdd3322,thorwor:0x3366ff,worluk:0xff8800,wizard:0xaa44ff};g.fillStyle(cm[e.type]||0xffffff,1);g.fillRect(ix+e.x*sx-2,iy+e.y*sy-2,4,4);});}
+  drawRadar(){const g=this.radarGfx;g.clear();const y0=MAZE_H;g.fillStyle(0x0a0a1a,1);g.fillRect(0,y0,MAZE_W,RADAR_H);g.lineStyle(2,0x00ff88,0.7);g.strokeRect(8,y0+8,MAZE_W-16,RADAR_H-16);if(!this._radarTxt)this._radarTxt=this.add.text(14,y0+10,'RADAR',{fontFamily:'Press Start 2P',fontSize:'10px',color:'#00ff88'});const ix=16,iy=y0+20,iw=MAZE_W-32,ih=RADAR_H-30;const sx=iw/MAZE_W,sy=ih/MAZE_H;
+    // Grid overlay for maze cells
+    g.lineStyle(1,0x1a2a3a,0.5);
+    for(let r=0;r<=ROWS;r++){g.lineBetween(ix,iy+r*(ih/ROWS),ix+iw,iy+r*(ih/ROWS));}
+    for(let c=0;c<=COLS;c++){g.lineBetween(ix+c*(iw/COLS),iy,ix+c*(iw/COLS),iy+ih);}
+    // Warp tunnels indicator
+    const midRows=[(ROWS/2-1)|0,(ROWS/2)|0];
+    midRows.forEach(r=>{g.fillStyle(0xff00ff,0.3);g.fillRect(ix,iy+r*(ih/ROWS),iw,ih/ROWS);});
+    if(this.player&&this.player.alive){g.fillStyle(0xffea00,1);g.fillRect(ix+this.player.x*sx-3,iy+this.player.y*sy-3,6,6);}
+    this.enemies.forEach(e=>{if(!e.alive)return;const cm={burwor:0x22dd33,garwor:0xdd3322,thorwor:0x3366ff,worluk:0xff8800,wizard:0xaa44ff};g.fillStyle(cm[e.type]||0xffffff,1);g.fillRect(ix+e.x*sx-2,iy+e.y*sy-2,5,5);});
+    
+    // Dynamic radar scanning sweep line
+    this.radarSweepAngle = (this.radarSweepAngle || 0) + 0.04;
+    const rcx = ix + iw/2;
+    const rcy = iy + ih/2;
+    const radius = Math.max(iw, ih)/2;
+    g.lineStyle(2, 0x00ff88, 0.35);
+    g.lineBetween(
+      rcx, rcy,
+      rcx + Math.cos(this.radarSweepAngle) * radius,
+      rcy + Math.sin(this.radarSweepAngle) * radius
+    );
+  }
 
   tryFire(dirOverride){
     if(this.state!=='playing'||!this.player||!this.player.alive)return;
@@ -667,13 +707,27 @@ class GameScene extends Phaser.Scene {
 
   handleBulletCollisions(){
     for(let i=this.bullets.length-1;i>=0;i--){const b=this.bullets[i];let hit=false;
-      for(const e of this.enemies){if(!e.alive)continue;if(Phaser.Math.Distance.Between(b.x,b.y,e.x,e.y)<22){this.score+=e.points;this.updateHUD();this.explodeAt(e.x,e.y);e.alive=false;if(e._halo){e._halo.destroy();e._halo=null;}e.destroy();hit=true;break;}}
+      for(const e of this.enemies){if(!e.alive)continue;if(Phaser.Math.Distance.Between(b.x,b.y,e.x,e.y)<22){this.score+=e.points;this.updateHUD();this.explodeAt(e.x,e.y,e.points);e.alive=false;if(e._halo){e._halo.destroy();e._halo=null;}e.destroy();hit=true;break;}}
       if(!hit)for(let j=this.enemyBullets.length-1;j>=0;j--){const eb=this.enemyBullets[j];if(Phaser.Math.Distance.Between(b.x,b.y,eb.x,eb.y)<12){eb.destroy();this.enemyBullets.splice(j,1);hit=true;break;}}
       if(hit){b.destroy();this.bullets.splice(i,1);}
     }
   }
 
-  explodeAt(x,y){
+  explodeAt(x,y,points){
+    // Floating points popup
+    if(points) {
+      const txt = this.add.text(x, y - 16, '+' + points, {fontFamily: '"Press Start 2P"', fontSize: '11px', color: '#ffea00'});
+      txt.setOrigin(0.5);
+      txt.setDepth(100);
+      this.tweens.add({
+        targets: txt,
+        y: y - 48,
+        alpha: 0,
+        duration: 650,
+        onComplete: () => txt.destroy()
+      });
+    }
+
     // Kenney pixel explosion: 9 frames played back over ~450ms.
     // We still draw a flash + particle ring on top of the spritesheet for
     // extra punch — the Kenney explosion is large but visually subtle.
@@ -717,8 +771,56 @@ class GameScene extends Phaser.Scene {
   }
 
   killPlayer(){if(this.state!=='playing')return;this.state='dying';this.explodeAt(this.player.x,this.player.y);this.playK('snd_hurt');this.player.alive=false;this.player.setVisible(false);this.lives--;this.updateHUD();this.time.delayedCall(900,()=>{if(this.lives<0)this.gameOver();else{const safe=this.findOpenCell((COLS/2)|0,ROWS-3)||{c:1,r:(ROWS/2)|0};const px=safe.c*CELL+CELL/2,py=safe.r*CELL+CELL/2;this.player.x=px;this.player.y=py;this.player.gridCol=safe.c;this.player.gridRow=safe.r;this.player.dir=DIR.NONE;this.player.queuedDir=DIR.NONE;this.queuedDir=DIR.NONE;this.player.setVisible(true);this.player.alive=true;this.state='playing';}});}
-  nextLevel(){if(this.state!=='playing')return;this.state='levelEnd';this.playK('snd_dungeon_clear');this.level++;this.updateHUD();this.time.delayedCall(800,()=>this.startLevel());}
-  gameOver(){this.state='gameover';this.playK('snd_gameover');document.getElementById('finalScore').textContent='SCORE: '+this.score;document.getElementById('gameOverScreen').classList.remove('hidden');}
+  nextLevel(){
+    if(this.state!=='playing')return;
+    this.state='levelEnd';
+    this.playK('snd_dungeon_clear');
+    
+    // Create animated Dungeon Cleared overlay
+    const overlay = this.add.container(0, 0).setDepth(200);
+    const bg = this.add.rectangle(MAZE_W/2, MAZE_H/2, MAZE_W, MAZE_H, 0x000000, 0.85);
+    const txt = this.add.text(MAZE_W/2, MAZE_H/2, `DUNGEON ${this.level}\nCLEANSED!`, {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '22px',
+      color: '#00ff88',
+      align: 'center',
+      lineSpacing: 14
+    }).setOrigin(0.5);
+    overlay.add([bg, txt]);
+    
+    // Blink effect
+    this.tweens.add({
+      targets: txt,
+      alpha: 0.3,
+      duration: 150,
+      yoyo: true,
+      repeat: 8
+    });
+    
+    this.level++;
+    this.updateHUD();
+    
+    this.time.delayedCall(2200, () => {
+      overlay.destroy();
+      this.startLevel();
+    });
+  }
+  gameOver(){
+    this.state='gameover';
+    this.playK('snd_gameover');
+    
+    // Persist High Score
+    const currentHigh = parseInt(localStorage.getItem('wow_high_score') || '0', 10);
+    let isNew = false;
+    if(this.score > currentHigh) {
+      localStorage.setItem('wow_high_score', this.score.toString());
+      isNew = true;
+    }
+    
+    const finalScoreEl = document.getElementById('finalScore');
+    finalScoreEl.innerHTML = `SCORE: ${this.score}<br><span style="color:#ffea00; font-size:10px;">${isNew ? 'NEW HIGH SCORE!' : 'HIGH SCORE: ' + Math.max(this.score, currentHigh)}</span>`;
+    document.getElementById('gameOverScreen').classList.remove('hidden');
+  }
 }
 
 const config={type:Phaser.AUTO,parent:'phaserWrap',width:GAME_W,height:GAME_H,backgroundColor:'#000',scale:{mode:Phaser.Scale.FIT,autoCenter:Phaser.Scale.CENTER_BOTH},scene:[GameScene]};
@@ -1011,6 +1113,11 @@ document.addEventListener('DOMContentLoaded',()=>{
       syncSceneFromTouches();
     }
   },250);
+
+  // Load and display high score
+  const high = localStorage.getItem('wow_high_score') || '0';
+  const display = document.getElementById('highScoreDisplay');
+  if(display) display.textContent = 'HIGH SCORE: ' + high;
 
   // Start / Restart
   function startBegin(){document.getElementById('startScreen').classList.add('hidden');(function tryB(n){if(window._gameScene&&window._gameScene._begin){window._gameScene._begin();return;}if(n>50)return;setTimeout(()=>tryB(n+1),100);})(0);}
