@@ -161,7 +161,7 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
 <script>
 // ============================================================
 // WIZARD OF WOR — Twin-stick style controls
@@ -776,7 +776,7 @@ class GameScene extends Phaser.Scene {
         const preferred = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? DIR.LEFT : DIR.RIGHT) : (dy < 0 ? DIR.UP : DIR.DOWN);
         if(use_opts.includes(preferred)) { chosen_dir = preferred; }
       }
-      e.dir = chosen_dir || Phaser.Math.RND.pick(use_opts) || DIR.NONE;
+      e.dir = chosen_dir || (use_opts.length ? Phaser.Math.RND.pick(use_opts) : Phaser.Math.RND.pick([DIR.LEFT, DIR.RIGHT, DIR.UP, DIR.DOWN]));
     }
     e.fireTimer-=dt*1000;if(e.fireTimer<=0){e.fireTimer=Phaser.Math.Between(2500,6000);if(this.player&&e.type!=='wizard')this.spawnEnemyBullet(e);}
   }
