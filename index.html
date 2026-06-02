@@ -694,7 +694,7 @@ class GameScene extends Phaser.Scene {
     const wl=this.enemies.filter(e=>e.alive&&e.type==='worluk');
     if(this.worlukSpawned&&wl.length===0&&!this.wizardSpawned){this.wizardSpawned=true;if(this.level>=2&&Math.random()<0.6){const m=(ROWS/2)|0;const s=this.findOpenCell(COLS-2,m);if(s)this.spawnEnemy('wizard',s.c*CELL+CELL/2,s.r*CELL+CELL/2);else this.nextLevel();}else this.nextLevel();}
     const wz=this.enemies.filter(e=>e.alive&&e.type==='wizard');if(this.wizardSpawned&&wz.length===0&&this.state==='playing')this.nextLevel();
-    this.drawRadar();
+    this.drawRadar();this.updateDebug();
   }
 
   handleInput(){
@@ -776,11 +776,27 @@ class GameScene extends Phaser.Scene {
         const preferred = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? DIR.LEFT : DIR.RIGHT) : (dy < 0 ? DIR.UP : DIR.DOWN);
         if(use_opts.includes(preferred)) { chosen_dir = preferred; }
       }
-      e.dir = chosen_dir || (use_opts.length ? Phaser.Math.RND.pick(use_opts) : Phaser.Math.RND.pick([DIR.LEFT, DIR.RIGHT, DIR.UP, DIR.DOWN]));
+      // ENEMY MOVEMENT GUARANTEE: always pick a direction (never freeze)
+    // If validDirs returned empty (trapped cell), force a random direction
+    // so the enemy at least tries to move. On next frame, canMove check
+    // will re-evaluate. This is the bulletproof fallback.
+    e.dir = chosen_dir || (use_opts.length ? Phaser.Math.RND.pick(use_opts) : Phaser.Math.RND.pick([DIR.LEFT, DIR.RIGHT, DIR.UP, DIR.DOWN]));
+    // Failsafe: if somehow dir is still NONE, force a random direction
+    if(e.dir===DIR.NONE){e.dir=Phaser.Math.RND.pick([DIR.LEFT,DIR.RIGHT,DIR.UP,DIR.DOWN]);}
     }
     e.fireTimer-=dt*1000;if(e.fireTimer<=0){e.fireTimer=Phaser.Math.Between(2500,6000);if(this.player&&e.type!=='wizard')this.spawnEnemyBullet(e);}
   }
 
+  // DEBUG overlay: shows enemy movement status
+  updateDebug(){
+    if(!this._debugTxt){
+      this._debugTxt=this.add.text(4,4,'DEBUG',{fontFamily:'Press Start 2P',fontSize:'8px',color:'#ff0000'}).setDepth(300);
+    }
+    const alive=this.enemies.filter(e=>e.alive);
+    let info='STATE:'+this.state+' ENEMIES:'+alive.length;
+    alive.forEach(e=>{const dn=['NONE','L','R','U','D'][e.dir]||'?';info+=' '+e.type+':'+dn+'('+Math.round(e.x)+','+Math.round(e.y)+')';});
+    this._debugTxt.setText(info);
+  }
   drawRadar(){const g=this.radarGfx;g.clear();const y0=MAZE_H;g.fillStyle(0x0a0a1a,1);g.fillRect(0,y0,MAZE_W,RADAR_H);g.lineStyle(2,0x00ff88,0.7);g.strokeRect(8,y0+8,MAZE_W-16,RADAR_H-16);if(!this._radarTxt)this._radarTxt=this.add.text(14,y0+10,'RADAR',{fontFamily:'Press Start 2P',fontSize:'10px',color:'#00ff88'});const ix=16,iy=y0+20,iw=MAZE_W-32,ih=RADAR_H-30;const sx=iw/MAZE_W,sy=ih/MAZE_H;
     // Grid overlay for maze cells
     g.lineStyle(1,0x1a2a3a,0.5);
