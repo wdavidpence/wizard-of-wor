@@ -762,7 +762,22 @@ class GameScene extends Phaser.Scene {
       }
       return;
     }
-    if(this.isCentered(e)){let opts=this.validDirs(e.gridCol,e.gridRow);const back=this.opposite(e.dir);const non=opts.filter(d=>d!==back);const use=non.length?non:opts;let ch=null;if(this.player&&Math.random()<0.5){const dx=this.player.x-e.x,dy=this.player.y-e.y;const pref=Math.abs(dx)>Math.abs(dy)?(dx<0?DIR.LEFT:DIR.RIGHT):(dy<0?DIR.UP:DIR.DOWN);if(use.includes(pref))ch=pref;}e.dir=ch||Phaser.Math.RND.pick(use)||DIR.NONE;}else if(!this.canMove(e.gridCol,e.gridRow,e.dir)){e.x=e.gridCol*CELL+CELL/2;e.y=e.gridRow*CELL+CELL/2;}
+    // Smart continuous corridor movement + player tracking (zero dead-ends)
+    if(this.isCentered(e) || e.dir === DIR.NONE || !this.canMove(e.gridCol, e.gridRow, e.dir)){
+      e.x = e.gridCol*CELL+CELL/2; e.y = e.gridRow*CELL+CELL/2; // Snap to center
+      let opts = this.validDirs(e.gridCol, e.gridRow);
+      const back = this.opposite(e.dir);
+      const forward_opts = opts.filter(d => d !== back);
+      const use_opts = forward_opts.length > 0 ? forward_opts : opts;
+      let chosen_dir = null;
+      if(this.player && this.player.alive && Math.random() < 0.65){
+        const dx = this.player.x - e.x;
+        const dy = this.player.y - e.y;
+        const preferred = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? DIR.LEFT : DIR.RIGHT) : (dy < 0 ? DIR.UP : DIR.DOWN);
+        if(use_opts.includes(preferred)) { chosen_dir = preferred; }
+      }
+      e.dir = chosen_dir || Phaser.Math.RND.pick(use_opts) || DIR.NONE;
+    }
     e.fireTimer-=dt*1000;if(e.fireTimer<=0){e.fireTimer=Phaser.Math.Between(2500,6000);if(this.player&&e.type!=='wizard')this.spawnEnemyBullet(e);}
   }
 
