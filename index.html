@@ -243,6 +243,46 @@ function playExplosionSound() {
   osc.start(); noise.start(); osc.stop(ctx.currentTime+0.65); noise.stop(ctx.currentTime+0.65);
 }
 
+// iOS/Safari compatible synthetic audio fallbacks (no .ogg support needed!)
+function playHurtSound() {
+  const ctx = getAudio();
+  const osc = ctx.createOscillator(); const gain = ctx.createGain();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(320, ctx.currentTime);
+  osc.frequency.linearRampToValueAtTime(80, ctx.currentTime + 0.32);
+  gain.gain.setValueAtTime(0.25, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.start(); osc.stop(ctx.currentTime + 0.38);
+}
+
+function playDungeonClearSound() {
+  const ctx = getAudio();
+  const now = ctx.currentTime;
+  const notes = [440, 554, 659, 880];
+  notes.forEach((freq, i) => {
+    const osc = ctx.createOscillator(); const gain = ctx.createGain();
+    osc.type = 'triangle'; osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0, now + i * 0.1);
+    gain.gain.linearRampToValueAtTime(0.2, now + i * 0.1 + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.1 + 0.22);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(now + i * 0.1); osc.stop(now + i * 0.1 + 0.25);
+  });
+}
+
+function playWarpSound() {
+  const ctx = getAudio();
+  const osc = ctx.createOscillator(); const gain = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(180, ctx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(1100, ctx.currentTime + 0.24);
+  gain.gain.setValueAtTime(0.2, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.26);
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.start(); osc.stop(ctx.currentTime + 0.28);
+}
+
 // === Maze generator ===
 // Produces clean 4-way-symmetric Wizard-of-Wor style mazes with a guaranteed
 // open horizontal corridor at the warp row and a flood-fill connectivity pass
@@ -354,10 +394,6 @@ class GameScene extends Phaser.Scene {
   constructor(){super('game');}
   preload(){
     // === Kenney asset loading ===
-    // Tiles (16x16 PNGs extracted from Kenney Roguelike Dungeon pack)
-    this.load.image('tile_wall','assets/tiles/wall.png');
-    this.load.image('tile_floor','assets/tiles/floor.png');
-    this.load.image('tile_warp','assets/tiles/warp.png');
     // Player + Wizard (humanoid sprites from Kenney Roguelike Characters pack)
     this.load.image('spr_player','assets/tiles/player.png');
     this.load.image('spr_wizard','assets/tiles/wizard.png');
@@ -372,16 +408,20 @@ class GameScene extends Phaser.Scene {
       const n=String(i).padStart(2,'0');
       this.load.image('exp_'+i,'assets/explosions/pixelExplosion'+n+'.png');
     }
-    // Audio (Kenney Retro Sounds + Sci-Fi packs)
-    this.load.audio('snd_shoot','assets/sounds/shoot.ogg');
-    this.load.audio('snd_explosion','assets/sounds/explosion.ogg');
-    this.load.audio('snd_hurt','assets/sounds/hurt.ogg');
-    this.load.audio('snd_warp','assets/sounds/warp.ogg');
-    this.load.audio('snd_wizard_teleport','assets/sounds/wizard_teleport.ogg');
-    this.load.audio('snd_gameover','assets/sounds/gameover.ogg');
-    this.load.audio('snd_dungeon_clear','assets/sounds/dungeon_clear.ogg');
-    this.load.audio('snd_enemy_appear','assets/sounds/enemy_appear.ogg');
-    this.load.audio('snd_radar','assets/sounds/radar.ogg');
+    // Audio preloading (Only if .ogg format is supported natively, e.g. not on iOS Safari)
+    const canPlayOgg = document.createElement('audio').canPlayType('audio/ogg; codecs="vorbis"') !== '';
+    this.canPlayOgg = canPlayOgg;
+    if(canPlayOgg) {
+      this.load.audio('snd_shoot','assets/sounds/shoot.ogg');
+      this.load.audio('snd_explosion','assets/sounds/explosion.ogg');
+      this.load.audio('snd_hurt','assets/sounds/hurt.ogg');
+      this.load.audio('snd_warp','assets/sounds/warp.ogg');
+      this.load.audio('snd_wizard_teleport','assets/sounds/wizard_teleport.ogg');
+      this.load.audio('snd_gameover','assets/sounds/gameover.ogg');
+      this.load.audio('snd_dungeon_clear','assets/sounds/dungeon_clear.ogg');
+      this.load.audio('snd_enemy_appear','assets/sounds/enemy_appear.ogg');
+      this.load.audio('snd_radar','assets/sounds/radar.ogg');
+    }
   }
   create(){
     window._gameScene=this;
@@ -446,8 +486,17 @@ class GameScene extends Phaser.Scene {
       if(this.cache.audio.exists(k)) this.kenneySounds[k]=this.sound.add(k,{volume:0.5});
     });
     this.playK = (key, opts={}) => {
-      const s=this.kenneySounds[key]; if(!s) return;
-      try{ s.play(opts); }catch(e){}
+      const s=this.kenneySounds[key];
+      if(s) {
+        try{ s.play(opts); }catch(e){}
+      } else {
+        // High-quality synthetic Web Audio engine fallback (for Safari / iOS)
+        if(key === 'snd_shoot') playShootSound();
+        else if(key === 'snd_explosion') playExplosionSound();
+        else if(key === 'snd_hurt' || key === 'snd_gameover') playHurtSound();
+        else if(key === 'snd_warp' || key === 'snd_wizard_teleport' || key === 'snd_enemy_appear') playWarpSound();
+        else if(key === 'snd_dungeon_clear') playDungeonClearSound();
+      }
     };
   }
 
@@ -505,42 +554,58 @@ class GameScene extends Phaser.Scene {
   }
   clearAll(){this.entityLayer.removeAll(true);this.bullets=[];this.enemyBullets=[];this.enemies=[];this.player=null;}
   drawMaze(){
-    // Tile-based rendering using Kenney Roguelike Dungeon tiles (16x16 source,
-    // scaled to CELL=48 → 3x). We rebuild a Container of Image sprites every
-    // level. Each maze cell is a floor tile; walls overlay on top.
+    // Procedural glowing neon maze rendering (Tron space-grid arcade style).
+    // Completely eliminates medieval muddy stone floor tile and wall assets
+    // to match a high-tech sci-fi theme consistent with glowing robots.
     if(!this.mazeTiles) this.mazeTiles=this.add.container(0,0);
     this.mazeTiles.removeAll(true);
     this.mazeTiles.setDepth(0);
-    const TILE_SCALE = CELL/16;
+    
+    const g = this.add.graphics();
+    g.setDepth(1);
+    this.mazeTiles.add(g);
+    
+    // Pitch-black space background is standard. We render glowing neon grid walls.
     for(let r=0;r<ROWS;r++){
       for(let c=0;c<COLS;c++){
-        const x=c*CELL+CELL/2, y=r*CELL+CELL/2;
-        // Floor underlay everywhere
-        if(this.textures.exists('tile_floor')){
-          const f=this.add.image(x,y,'tile_floor');
-          f.setScale(TILE_SCALE).setTint(0x6688cc);
-          this.mazeTiles.add(f);
-        }
-        // Wall overlay if this cell is solid
-        if(this.maze[r][c]===1 && this.textures.exists('tile_wall')){
-          const w=this.add.image(x,y,'tile_wall');
-          w.setScale(TILE_SCALE).setTint(0x9988ff);
-          this.mazeTiles.add(w);
+        if(this.maze[r][c]===1){
+          const x = c * CELL;
+          const y = r * CELL;
+          
+          // Draw solid core block
+          g.fillStyle(0x060618, 1);
+          g.fillRect(x + 2, y + 2, CELL - 4, CELL - 4);
+          
+          // Draw bright, glowing neon outline
+          g.lineStyle(2, 0x0088ff, 1);
+          g.strokeRect(x + 2, y + 2, CELL - 4, CELL - 4);
+          
+          // Outer subtle neon-glow shadow
+          g.lineStyle(1, 0x0044bb, 0.4);
+          g.strokeRect(x + 1, y + 1, CELL - 2, CELL - 2);
         }
       }
     }
-    // Warp indicators on left/right edges at the two mid rows
+    
+    // Warp indicators on side edges at the two mid rows (glowing purple portals)
     const midRows=[(ROWS/2-1)|0,(ROWS/2)|0];
-    if(this.textures.exists('tile_warp')){
-      midRows.forEach(r=>{
-        [0,COLS-1].forEach(c=>{
-          const w=this.add.image(c*CELL+CELL/2, r*CELL+CELL/2, 'tile_warp');
-          w.setScale(TILE_SCALE).setTint(0xff66ff).setAlpha(0.7);
-          this.mazeTiles.add(w);
+    midRows.forEach(r=>{
+      [0,COLS-1].forEach(c=>{
+        const x = c * CELL + CELL/2;
+        const y = r * CELL + CELL/2;
+        const portal = this.add.circle(x, y, 16, 0xff00ff, 0.7);
+        this.mazeTiles.add(portal);
+        this.tweens.add({
+          targets: portal,
+          scale: 1.3,
+          alpha: 0.3,
+          duration: 450,
+          yoyo: true,
+          repeat: -1
         });
       });
-    }
-    // Keep the procedural mazeGfx around for backward compat but clear it.
+    });
+    
     this.mazeGfx.clear();
   }
   isWall(c,r){if(r<0||r>=ROWS)return true;if(c<0||c>=COLS)return false;return this.maze[r][c]===1;}
