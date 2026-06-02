@@ -787,14 +787,31 @@ class GameScene extends Phaser.Scene {
     e.fireTimer-=dt*1000;if(e.fireTimer<=0){e.fireTimer=Phaser.Math.Between(2500,6000);if(this.player&&e.type!=='wizard')this.spawnEnemyBullet(e);}
   }
 
-  // DEBUG overlay: shows enemy movement status
   updateDebug(){
     if(!this._debugTxt){
-      this._debugTxt=this.add.text(4,4,'DEBUG',{fontFamily:'Press Start 2P',fontSize:'8px',color:'#ff0000'}).setDepth(300);
+      // BIG BRIGHT BANNER — impossible to miss
+      const bg=this.add.rectangle(GAME_W/2, 30, GAME_W, 50, 0x000000, 0.85).setDepth(300);
+      bg.setStrokeStyle(3, 0xff0000);
+      this._debugBg = bg;
+      this._debugTxt=this.add.text(GAME_W/2, 25, '', {fontFamily:'Press Start 2P',fontSize:'14px',color:'#00ff00',align:'center'}).setOrigin(0.5).setDepth(301);
     }
     const alive=this.enemies.filter(e=>e.alive);
-    let info='STATE:'+this.state+' ENEMIES:'+alive.length;
-    alive.forEach(e=>{const dn=['NONE','L','R','U','D'][e.dir]||'?';info+=' '+e.type+':'+dn+'('+Math.round(e.x)+','+Math.round(e.y)+')';});
+    let info=this.state.toUpperCase();
+    let moving=0, frozen=0;
+    alive.forEach(e=>{
+      const dn=['NONE','L','R','U','D'][e.dir]||'?';
+      info+=' '+e.type+':'+dn;
+      // Track if x/y are actually changing
+    });
+    // Check if any enemy is truly frozen (dir=NONE)
+    const hasFrozen=alive.some(e=>e.dir===DIR.NONE);
+    if(hasFrozen){
+      info+=' | FROZEN!';
+      this._debugTxt.setColor('#ff0000');
+    } else {
+      info+=' | MOVING';
+      this._debugTxt.setColor('#00ff00');
+    }
     this._debugTxt.setText(info);
   }
   drawRadar(){const g=this.radarGfx;g.clear();const y0=MAZE_H;g.fillStyle(0x0a0a1a,1);g.fillRect(0,y0,MAZE_W,RADAR_H);g.lineStyle(2,0x00ff88,0.7);g.strokeRect(8,y0+8,MAZE_W-16,RADAR_H-16);if(!this._radarTxt)this._radarTxt=this.add.text(14,y0+10,'RADAR',{fontFamily:'Press Start 2P',fontSize:'10px',color:'#00ff88'});const ix=16,iy=y0+20,iw=MAZE_W-32,ih=RADAR_H-30;const sx=iw/MAZE_W,sy=ih/MAZE_H;
