@@ -559,7 +559,8 @@ class GameScene extends Phaser.Scene {
     const e=this.spawnEntity(type,x,y,{type,alive:true,dir:Phaser.Math.RND.pick([DIR.LEFT,DIR.RIGHT,DIR.UP,DIR.DOWN]),speed:cfg.speed,points:cfg.points,fades:cfg.fades||false,invisible:cfg.invisible||false,flees:cfg.flees||false,teleports:cfg.teleports||false,fireTimer:Phaser.Math.Between(2000,6000),teleportTimer:type==='wizard'?Phaser.Math.Between(3000,5000):0,escapeTimer:type==='worluk'?1200:0,fleeRight:fleeRight});
     e._isTopView = (type==='burwor' || type==='garwor' || type==='thorwor' || type==='worluk');
     
-    // ARCADE ACCURATE PLAYER & ENEMY COLOR SCHEME (TINTS)
+    // Kenney sprites are natively colored beautifully (Green alien, Red alien, Blue ufo).
+    // No full tint required, preventing solid color-blown "blobs"!
     const arcadeColors={
       burwor:  0x22dd33, // Green
       garwor:  0xffee00, // Yellow
@@ -567,7 +568,6 @@ class GameScene extends Phaser.Scene {
       worluk:  0xffee00, // Yellow
       wizard:  0x0088ff, // Blue
     };
-    e.setTint(arcadeColors[type]||0xffffff);
 
     // Glow halo matching arcade colors
     const halo=this.add.circle(x,y,CELL*0.45,arcadeColors[type]||0xffffff,0.22);
