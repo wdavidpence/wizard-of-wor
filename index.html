@@ -13,14 +13,9 @@ html, body { width:100%; height:100%; background:#000; overflow:hidden; touch-ac
 #gameContainer { position:fixed; inset:0; width:100vw; height:100vh; overflow:hidden; }
 #phaserWrap { width:100%; height:100%; position:relative; z-index:1; }
 #phaserWrap canvas { display:block; image-rendering:pixelated; image-rendering:crisp-edges; }
-.overlay { position:fixed; inset:0; z-index:1000; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.92); }
+/* Simple game over overlay - used only for non-Phaser fallback */
+.overlay { position:fixed; inset:0; z-index:1000; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,0.92); }
 .overlay.hidden { display:none; }
-#startScreen { flex-direction:column; gap:20px; }
-#startScreen h1 { color:#ff00ff; font-size:28px; text-shadow:0 0 20px #ff00ff,0 0 40px #ff00ff; margin-bottom:10px; }
-#startScreen .subtitle { color:#00ff88; font-size:10px; margin-bottom:20px; }
-#startScreen .instructions { color:#aaa; font-size:8px; line-height:2; text-align:center; max-width:320px; }
-#startScreen .start-btn { background:#ff00ff; color:#fff; border:none; padding:15px 40px; font-family:'Press Start 2P',monospace; font-size:14px; cursor:pointer; margin-top:20px; }
-#startScreen .start-btn:active { background:#cc00cc; }
 #gameOverScreen { flex-direction:column; gap:15px; }
 #gameOverScreen h1 { color:#ff0000; font-size:24px; }
 #gameOverScreen .final-score { color:#ffea00; font-size:16px; }
@@ -32,19 +27,6 @@ html, body { width:100%; height:100%; background:#000; overflow:hidden; touch-ac
 <body>
 <div id="gameContainer">
   <div id="phaserWrap"></div>
-  <div id="startScreen" class="overlay">
-    <h1>WIZARD OF WOR</h1>
-    <div class="subtitle">— MIDWAY 1981 —</div>
-    <div class="instructions">
-      SWIPE TO MOVE<br>
-      TAP FIRE BUTTON TO SHOOT<br>
-      CLEAR ALL MONSTERS<br>
-      TO ADVANCE THE DUNGEON<br><br>
-      WATCH THE RADAR<br>
-      FOR INVISIBLE ENEMIES
-    </div>
-    <button class="start-btn" id="startBtn">INSERT COIN</button>
-  </div>
   <div id="gameOverScreen" class="overlay hidden">
     <h1>GAME OVER</h1>
     <div class="final-score" id="finalScore">SCORE: 0</div>
@@ -55,8 +37,8 @@ html, body { width:100%; height:100%; background:#000; overflow:hidden; touch-ac
 <script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
 <script>
 // ============================================================
-// WIZARD OF WOR — Pixel-Art Arcade Recreation
-// Faithful to the 1981 Midway arcade original
+// WIZARD OF WOR — Arcade Faithful Recreation (1981 Midway)
+// Refactored: 2-player co-op, attract mode, CRT, color walls
 // ============================================================
 
 const COLS = 22, ROWS = 14, CELL = 48;
@@ -70,49 +52,47 @@ const DVEC = {
   [DIR.UP]:{x:0,y:-1},   [DIR.DOWN]:{x:0,y:1}, [DIR.NONE]:{x:0,y:0}
 };
 
+// Arcade-accurate wall color cycling (5 colors)
+const WALL_COLORS = [0x2244cc, 0x22cc44, 0xcc2222, 0xcccc22, 0x22cccc];
+
+// ============================================================
+// HIGH SCORE PERSISTENCE
+// ============================================================
+
+function getHighScores() {
+  try { return JSON.parse(localStorage.getItem('wor_highscores') || '[]'); }
+  catch(e) { return []; }
+}
+
+function saveScore(score, level) {
+  const scores = getHighScores();
+  scores.push({ score: score, level: level, date: Date.now() });
+  scores.sort((a, b) => b.score - a.score);
+  localStorage.setItem('wor_highscores', JSON.stringify(scores.slice(0, 5)));
+}
+
+function formatScore(s) { return s.toString().padStart(7, '0'); }
+
 // ============================================================
 // PIXEL ART DRAWING ENGINE
 // ============================================================
 
-function createPixelSprite(pixels, scale) {
-  const rows = pixels.length;
-  const cols = pixels[0].length;
-  const w = cols * scale;
-  const h = rows * scale;
-  const g = new Phaser.Game.Graphics();
-  g.setSize(w, h);
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const p = pixels[r][c];
-      if (p && p !== '.' && p !== ' ') {
-        const color = p === '#' ? 0xffffff : parseInt(p.slice(1), 16);
-        g.fillStyle(color, 1);
-        g.fillRect(c * scale, r * scale, scale, scale);
-      }
-    }
-  }
-  return g;
-}
-
-// All sprite pixel maps (8-bit style, arcade-accurate)
-// Each map is a grid: '#' = pixel color, '.' = transparent
-// Colors defined separately per sprite
-
-function drawPlayerSprite(scene) {
-  // Top-down space warrior — body + helmet + gun
+function drawPlayerSprite(scene, isP1) {
   const g = scene.make.graphics({x:0, y:0, add:false});
-  const s = 4; // pixel scale
-  // Body (blue suit)
-  g.fillStyle(0x0044aa, 1);
-  g.fillRect(s, s, 6*s, 8*s); // torso
-  g.fillRect(2*s, 9*s, 4*s, 3*s); // legs
+  const s = 4;
+  const bodyColor = isP1 ? 0x4488ff : 0xff4444;
+  const accentColor = isP1 ? 0x2266dd : 0xdd2222;
+  // Body
+  g.fillStyle(bodyColor, 1);
+  g.fillRect(s, s, 6*s, 8*s);
+  g.fillRect(2*s, 9*s, 4*s, 3*s);
   // Helmet (silver)
   g.fillStyle(0xaaaaaa, 1);
-  g.fillRect(2*s, 0, 4*s, 3*s); // helmet
-  g.fillRect(0, 2*s, 2*s, 2*s); // helmet sides
+  g.fillRect(2*s, 0, 4*s, 3*s);
+  g.fillRect(0, 2*s, 2*s, 2*s);
   g.fillRect(6*s, 2*s, 2*s, 2*s);
-  // Visor (red)
-  g.fillStyle(0xff2222, 1);
+  // Visor
+  g.fillStyle(0xffffff, 1);
   g.fillRect(2*s, 2*s, 4*s, s);
   // Gun (right hand)
   g.fillStyle(0x888888, 1);
@@ -120,87 +100,68 @@ function drawPlayerSprite(scene) {
   // Helmet antenna
   g.fillStyle(0xffaa00, 1);
   g.fillRect(3*s, -s, 2*s, s);
-  g.generateTexture('player', (8)*s, (12)*s);
+  g.generateTexture('player1', (8)*s, (12)*s);
+  g.generateTexture('player2', (8)*s, (12)*s);
   g.destroy();
-  return 'player';
 }
 
 function drawBurworSprite(scene) {
-  // Burwor: Wolf-type, blue, always visible
   const g = scene.make.graphics({x:0, y:0, add:false});
   const s = 4;
-  // Body (blue wolf)
   g.fillStyle(0x2244cc, 1);
-  g.fillRect(2*s, 2*s, 4*s, 6*s); // body
-  g.fillRect(0, 4*s, 2*s, 4*s); // left side
-  g.fillRect(6*s, 4*s, 2*s, 4*s); // right side
-  // Head (darker blue)
+  g.fillRect(2*s, 2*s, 4*s, 6*s);
+  g.fillRect(0, 4*s, 2*s, 4*s);
+  g.fillRect(6*s, 4*s, 2*s, 4*s);
   g.fillStyle(0x1122aa, 1);
-  g.fillRect(1*s, 0, 6*s, 3*s); // head
-  // Eyes (white)
+  g.fillRect(1*s, 0, 6*s, 3*s);
   g.fillStyle(0xffffff, 1);
   g.fillRect(2*s, s, s, s);
   g.fillRect(5*s, s, s, s);
-  // Legs
   g.fillStyle(0x2244cc, 1);
   g.fillRect(1*s, 8*s, 2*s, 2*s);
   g.fillRect(5*s, 8*s, 2*s, 2*s);
-  // Tail
   g.fillStyle(0x1122aa, 1);
   g.fillRect(0, 7*s, s, 2*s);
   g.generateTexture('burwor', (8)*s, (10)*s);
   g.destroy();
-  return 'burwor';
 }
 
 function drawGarworSprite(scene) {
-  // Garwor: T-Rex type, yellow, fades in/out
   const g = scene.make.graphics({x:0, y:0, add:false});
   const s = 4;
-  // Body (yellow dinosaur)
   g.fillStyle(0xddaa00, 1);
-  g.fillRect(2*s, 2*s, 4*s, 6*s); // body
-  g.fillRect(0, 4*s, 2*s, 3*s); // left
-  g.fillRect(6*s, 4*s, 2*s, 3*s); // right
-  // Head (darker yellow, T-rex shape)
+  g.fillRect(2*s, 2*s, 4*s, 6*s);
+  g.fillRect(0, 4*s, 2*s, 3*s);
+  g.fillRect(6*s, 4*s, 2*s, 3*s);
   g.fillStyle(0xbb8800, 1);
-  g.fillRect(1*s, 0, 6*s, 3*s); // head
-  g.fillRect(0, s, s, 2*s); // snout
-  g.fillRect(7*s, s, s, 2*s); // snout
-  // Eyes (red)
+  g.fillRect(1*s, 0, 6*s, 3*s);
+  g.fillRect(0, s, s, 2*s);
+  g.fillRect(7*s, s, s, 2*s);
   g.fillStyle(0xff0000, 1);
   g.fillRect(2*s, s, s, s);
   g.fillRect(5*s, s, s, s);
-  // Legs
   g.fillStyle(0xddaa00, 1);
   g.fillRect(1*s, 8*s, 2*s, 2*s);
   g.fillRect(5*s, 8*s, 2*s, 2*s);
-  // Tail
   g.fillStyle(0xbb8800, 1);
   g.fillRect(0, 6*s, s, 2*s);
   g.fillRect(0, 7*s, 2*s, s);
   g.generateTexture('garwor', (8)*s, (10)*s);
   g.destroy();
-  return 'garwor';
 }
 
 function drawThorworSprite(scene) {
-  // Thorwor: Scorpion type, red, always invisible in maze
   const g = scene.make.graphics({x:0, y:0, add:false});
   const s = 4;
-  // Body (red scorpion)
   g.fillStyle(0xcc2222, 1);
-  g.fillRect(2*s, 2*s, 4*s, 5*s); // body
-  // Tail (curved up)
+  g.fillRect(2*s, 2*s, 4*s, 5*s);
   g.fillStyle(0xff0000, 1);
-  g.fillRect(6*s, 0, s, 3*s); // tail up
-  g.fillRect(7*s, 0, 2*s, s); // stinger
+  g.fillRect(6*s, 0, s, 3*s);
+  g.fillRect(7*s, 0, 2*s, s);
   g.fillRect(7*s, -s, s, s);
-  // Eyes (white)
   g.fillStyle(0xffffff, 1);
   g.fillRect(2*s, s, s, s);
   g.fillRect(5*s, s, s, s);
-  // Legs
   g.fillStyle(0xcc2222, 1);
   g.fillRect(0, 5*s, 2*s, s);
   g.fillRect(6*s, 5*s, 2*s, s);
@@ -208,69 +169,52 @@ function drawThorworSprite(scene) {
   g.fillRect(5*s, 7*s, 2*s, 2*s);
   g.generateTexture('thorwor', (9)*s, (10)*s);
   g.destroy();
-  return 'thorwor';
 }
 
 function drawWorlukSprite(scene) {
-  // Worluk: Insectoid, flies erratically, yellow
   const g = scene.make.graphics({x:0, y:0, add:false});
   const s = 4;
-  // Body (yellow insect)
   g.fillStyle(0xddaa00, 1);
-  g.fillRect(2*s, 3*s, 4*s, 4*s); // body
-  // Wings (translucent)
+  g.fillRect(2*s, 3*s, 4*s, 4*s);
   g.fillStyle(0xffee88, 0.6);
-  g.fillRect(0, 1*s, 2*s, 5*s); // left wing
-  g.fillRect(6*s, 1*s, 2*s, 5*s); // right wing
-  // Head
+  g.fillRect(0, 1*s, 2*s, 5*s);
+  g.fillRect(6*s, 1*s, 2*s, 5*s);
   g.fillStyle(0xddaa00, 1);
-  g.fillRect(2*s, 0, 4*s, 3*s); // head
-  // Eyes (black)
+  g.fillRect(2*s, 0, 4*s, 3*s);
   g.fillStyle(0x000000, 1);
   g.fillRect(2*s, s, s, s);
   g.fillRect(5*s, s, s, s);
-  // Legs
   g.fillStyle(0xddaa00, 1);
   g.fillRect(1*s, 7*s, 2*s, 2*s);
   g.fillRect(5*s, 7*s, 2*s, 2*s);
   g.generateTexture('worluk', (8)*s, (9)*s);
   g.destroy();
-  return 'worluk';
 }
 
 function drawWizardSprite(scene) {
-  // Wizard of Wor: Blue, teleports, taunts
   const g = scene.make.graphics({x:0, y:0, add:false});
   const s = 4;
-  // Robe (blue)
   g.fillStyle(0x2244cc, 1);
-  g.fillRect(2*s, 3*s, 4*s, 7*s); // robe
-  g.fillRect(0, 5*s, 2*s, 5*s); // robe sides
+  g.fillRect(2*s, 3*s, 4*s, 7*s);
+  g.fillRect(0, 5*s, 2*s, 5*s);
   g.fillRect(6*s, 5*s, 2*s, 5*s);
-  // Head (pale)
   g.fillStyle(0xddccaa, 1);
-  g.fillRect(2*s, 0, 4*s, 4*s); // face
-  // Hat (blue pointy)
+  g.fillRect(2*s, 0, 4*s, 4*s);
   g.fillStyle(0x2244cc, 1);
-  g.fillRect(1*s, -2*s, 6*s, 3*s); // hat base
-  g.fillRect(3*s, -3*s, 2*s, s); // hat point
-  // Eyes (glowing yellow)
+  g.fillRect(1*s, -2*s, 6*s, 3*s);
+  g.fillRect(3*s, -3*s, 2*s, s);
   g.fillStyle(0xffaa00, 1);
   g.fillRect(2*s, s, s, s);
   g.fillRect(5*s, s, s, s);
-  // Beard (gray)
   g.fillStyle(0xaaaaaa, 1);
   g.fillRect(2*s, 3*s, 4*s, s);
   g.fillRect(3*s, 4*s, 2*s, s);
-  // Staff
   g.fillStyle(0x886644, 1);
   g.fillRect(7*s, 0, s, 10*s);
-  // Staff gem
   g.fillStyle(0xff00ff, 1);
   g.fillRect(7*s, -s, s, s);
   g.generateTexture('wizard', (8)*s, (12)*s);
   g.destroy();
-  return 'wizard';
 }
 
 function drawBulletSprite(scene) {
@@ -281,7 +225,6 @@ function drawBulletSprite(scene) {
   g.fillRect(2, 1, 8, 6);
   g.generateTexture('bullet', 12, 8);
   g.destroy();
-  return 'bullet';
 }
 
 function drawEnemyBulletSprite(scene) {
@@ -292,7 +235,6 @@ function drawEnemyBulletSprite(scene) {
   g.fillRect(2, 1, 8, 6);
   g.generateTexture('ebullet', 12, 8);
   g.destroy();
-  return 'ebullet';
 }
 
 function drawExplosionSprite(scene) {
@@ -305,18 +247,15 @@ function drawExplosionSprite(scene) {
   g.fillRect(5, 5, 2, 2);
   g.generateTexture('explosion', 12, 12);
   g.destroy();
-  return 'explosion';
 }
 
 function drawBackupBoxSprite(scene) {
   const g = scene.make.graphics({x:0, y:0, add:false});
   const s = 3;
-  // Sealed box (gray with X)
   g.fillStyle(0x666666, 1);
   g.fillRect(0, 0, 8*s, 8*s);
   g.fillStyle(0x444444, 1);
   g.fillRect(s, s, 6*s, 6*s);
-  // X mark
   g.fillStyle(0xffaa00, 1);
   g.fillRect(s, s, s, 6*s);
   g.fillRect(6*s, s, s, 6*s);
@@ -324,11 +263,10 @@ function drawBackupBoxSprite(scene) {
   g.fillRect(s, s, 6*s, s);
   g.generateTexture('backup', (8)*s, (8)*s);
   g.destroy();
-  return 'backup';
 }
 
 // ============================================================
-// AUDIO ENGINE (Web Audio API — no external files needed)
+// AUDIO ENGINE
 // ============================================================
 
 let audioCtx = null;
@@ -341,7 +279,6 @@ function getAudio() {
 }
 
 function playDragnetTheme() {
-  // 5-note Dragnet opening (C, G, C, G, C)
   try {
     const ctx = getAudio();
     const notes = [261.63, 392.00, 523.25, 392.00, 523.25];
@@ -501,20 +438,27 @@ function playWizardTaunt() {
   } catch(e) {}
 }
 
-// Speech synthesis for Wizard taunts
-function speakRobotic(text) {
-  if (!window.speechSynthesis) return;
+function playLevelStart() {
   try {
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.pitch = 0.3;
-    utter.rate = 0.7;
-    utter.volume = 0.8;
-    speechSynthesis.speak(utter);
+    const ctx = getAudio();
+    const notes = [440, 554.37, 659.25, 880];
+    const now = ctx.currentTime;
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.12, now + i * 0.12);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.12 + 0.1);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(now + i * 0.12);
+      osc.stop(now + i * 0.12 + 0.12);
+    });
   } catch(e) {}
 }
 
 // ============================================================
-// MAZE GENERATION (faithful to arcade)
+// MAZE GENERATION
 // ============================================================
 
 function generateMaze(level) {
@@ -523,14 +467,11 @@ function generateMaze(level) {
     g.push([]);
     for (let c = 0; c < COLS; c++) g[r].push(0);
   }
-  // Outer border
   for (let c = 0; c < COLS; c++) { g[0][c] = 1; g[ROWS-1][c] = 1; }
   for (let r = 0; r < ROWS; r++) { g[r][0] = 1; g[r][COLS-1] = 1; }
-  // Warp openings on two middle rows
   const m1 = (ROWS/2-1)|0, m2 = (ROWS/2)|0;
   g[m1][0] = 0; g[m1][COLS-1] = 0; g[m2][0] = 0; g[m2][COLS-1] = 0;
 
-  // Deterministic PRNG seeded by level
   let seed = level * 7919 + 13;
   function rnd() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
 
@@ -545,7 +486,6 @@ function generateMaze(level) {
     g[ROWS-1-r][COLS-1-c] = v;
   }
 
-  // Maze density decreases with level (arcade accurate)
   const wallChance = Math.max(0.25, 0.50 - level * 0.025);
   const stickChance = Math.max(0.30, 0.65 - level * 0.025);
 
@@ -564,27 +504,21 @@ function generateMaze(level) {
     }
   }
 
-  // Clear warp row
   for (let c = 1; c < COLS-1; c++) g[m1][c] = 0;
   for (let c = 1; c < COLS-1; c++) {
     if (g[m2][c] === 1 && rnd() < 0.6) g[m2][c] = 0;
   }
 
-  // Special dungeons: The Arena (level 6) and The Pit (level 13, 19, 25...)
   const isPit = (level >= 13 && (level - 13) % 6 === 0);
   const isArena = (level === 6);
 
   if (isArena) {
-    // Wide open space — remove center walls
     for (let r = 3; r < 11; r++) {
-      for (let c = 5; c < 17; c++) {
-        g[r][c] = 0;
-      }
+      for (let c = 5; c < 17; c++) g[r][c] = 0;
     }
   }
 
   if (isPit) {
-    // Very few walls — high danger
     for (let r = 2; r < ROWS-2; r += 2) {
       for (let c = 2; c < COLS-2; c += 2) {
         if (rnd() < 0.15) paintCell(r, c, 1);
@@ -592,7 +526,6 @@ function generateMaze(level) {
     }
   }
 
-  // Guarantee player + spawn cells are open
   const startR = ROWS-3, startC = (COLS/2)|0;
   paintCell(startR, startC, 0);
   paintCell(startR, startC-1, 0);
@@ -633,16 +566,14 @@ function findOpenCell(maze, c, r) {
 class GameScene extends Phaser.Scene {
   constructor() { super('game'); }
 
-  preload() {
-    // No external assets — all procedural pixel art
-  }
+  preload() {}
 
   create() {
     window._gameScene = this;
     this.cameras.main.setBackgroundColor('#000');
 
     // Draw all pixel art sprites
-    drawPlayerSprite(this);
+    drawPlayerSprite(this, true);
     drawBurworSprite(this);
     drawGarworSprite(this);
     drawThorworSprite(this);
@@ -653,129 +584,302 @@ class GameScene extends Phaser.Scene {
     drawExplosionSprite(this);
     drawBackupBoxSprite(this);
 
-    // Score
-    this.score = 0; this.lives = 3; this.level = 1; this.state = 'idle';
-    this.bullets = []; this.enemyBullets = []; this.player = null; this.enemies = [];
-    this.maze = null; this.mazeGfx = this.add.graphics();
-    this.mazeTiles = this.add.container(0, 0); this.mazeTiles.setDepth(0);
-    this.entityLayer = this.add.container(0, 0); this.entityLayer.setDepth(10);
-    this.radarGfx = this.add.graphics(); this.radarGfx.setDepth(20);
+    // State
+    this.score = 0;
+    this.p1Lives = 3;
+    this.p2Lives = 3;
+    this.level = 1;
+    this.state = 'idle';
+    this.attractMode = true;
+    this.bullets = [];
+    this.enemyBullets = [];
+    this.player = null;
+    this.player2 = null;
+    this.enemies = [];
+    this.maze = null;
+    this.mazeGfx = this.add.graphics();
+    this.mazeTiles = this.add.container(0, 0);
+    this.mazeTiles.setDepth(0);
+    this.entityLayer = this.add.container(0, 0);
+    this.entityLayer.setDepth(10);
+    this.radarGfx = this.add.graphics();
+    this.radarGfx.setDepth(20);
+    this.crtGfx = this.add.graphics();
+    this.crtGfx.setDepth(50);
+    this.crtGfx.setScrollFactor(0);
+    this.hudGfx = this.add.graphics();
+    this.hudGfx.setDepth(5);
+    this.hudGfx.setScrollFactor(0);
+    this.tauntDisplay = null;
 
-    // 4-way controls
+    // Controls
     this.cursors = this.input.keyboard.createCursorKeys();
     this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
-    this.spaceKey.on('down', () => this.tryFire());
+    this.numPad0 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ZERO);
+    this.numPadEnter = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
 
-    // Touch controls
-    this.touchDir = DIR.NONE; this.queuedDir = DIR.NONE;
+    this.touchDir = DIR.NONE;
+    this.touchDir2 = DIR.NONE;
+    this.queuedDir = DIR.NONE;
+    this.queuedDir2 = DIR.NONE;
     this.fireDir = DIR.NONE;
 
-    // Speed-up tracking
     this.dungeonStartTime = 0;
-    this.speedUpInterval = 7000; // 7 seconds (arcade accurate)
+    this.speedUpInterval = 7000;
 
-    // Backup warrior
-    this.backupActive = false; this.backupTimer = 0; this.backupX = 0; this.backupY = 0;
+    this.backupActive = false;
+    this.backupTimer = 0;
+    this.backupX = 0;
+    this.backupY = 0;
     this.backupGroup = null;
+    this.backupPlayer = null; // 'p1' or 'p2'
+
+    // Attract mode objects
+    this.attractTitle = null;
+    this.attractInstr = null;
+    this.attractTap = null;
+    this.attractHs = null;
+    this.attractDecor = [];
+
+    // CRT toggle
+    this.showCRT = true;
 
     this.updateHUD();
+    this.drawAttractMode();
 
     // Touch input
     this.setupTouchInput();
+
+    // Listen for any key to exit attract mode
+    this.input.keyboard.on('keydown', () => {
+      if (this.attractMode) this.startGame();
+    });
+    // Touch to start
+    this.input.on('pointerdown', () => {
+      if (this.attractMode) this.startGame();
+    });
+  }
+
+  drawAttractMode() {
+    // Clear any existing attract objects
+    if (this.attractTitle) this.attractTitle.destroy();
+    if (this.attractInstr) this.attractInstr.destroy();
+    if (this.attractTap) this.attractTap.destroy();
+    if (this.attractHs) this.attractHs.destroy();
+
+    this.attractTitle = this.add.text(MAZE_W/2, MAZE_H*0.25, 'WIZARD OF WOR', {
+      fontFamily: 'Press Start 2P', fontSize: '20px', color: '#ff00ff'
+    }).setOrigin(0.5);
+
+    this.attractInstr = this.add.text(MAZE_W/2, MAZE_H*0.48, 'PLAYER 1: ARROW KEYS + SPACE\nPLAYER 2: NUMPAD + ENTER\n\nCROSSHAIRS = P1   DIAMONDS = P2', {
+      fontFamily: 'Press Start 2P', fontSize: '8px', color: '#00ff88', align: 'center', lineSpacing: 6
+    }).setOrigin(0.5);
+
+    const hs = getHighScores();
+    let hsText = '';
+    if (hs.length > 0) {
+      hsText = '\nHIGH SCORES\n';
+      for (let i = 0; i < Math.min(3, hs.length); i++) {
+        hsText += hs[i].score.toString().padStart(7, '0') + '  LEVEL ' + hs[i].level + '\n';
+      }
+    }
+    this.attractHs = this.add.text(MAZE_W/2, MAZE_H*0.72, hsText, {
+      fontFamily: 'Press Start 2P', fontSize: '9px', color: '#ffea00', align: 'center'
+    }).setOrigin(0.5);
+
+    this.attractTap = this.add.text(MAZE_W/2, MAZE_H*0.9, 'TAP OR PRESS ANY KEY', {
+      fontFamily: 'Press Start 2P', fontSize: '10px', color: '#ffea00'
+    }).setOrigin(0.5);
+
+    // Blink animation on title and tap
+    this.tweens.add({
+      targets: this.attractTitle,
+      alpha: 0.3, duration: 800, yoyo: true, repeat: -1
+    });
+    this.tweens.add({
+      targets: this.attractTap,
+      alpha: 0.3, duration: 600, yoyo: true, repeat: -1
+    });
+
+    // Spawn decorative Burwors for attract mode
+    this.attractDecor = [];
+    for (let i = 0; i < 4; i++) {
+      const e = this.spawnEnemy('burwor',
+        Phaser.Math.Between(200, MAZE_W-200),
+        Phaser.Math.Between(100, MAZE_H-100)
+      );
+      e.alive = false;
+      e.isDecor = true;
+      e.decorDir = Phaser.Math.RND.pick([DIR.LEFT, DIR.RIGHT, DIR.UP, DIR.DOWN]);
+      e.decorSpeed = 30 + Math.random() * 20;
+      this.attractDecor.push(e);
+    }
   }
 
   setupTouchInput() {
     const gameArea = document.getElementById('gameContainer');
-    const startBtn = document.getElementById('startBtn');
     const restartBtn = document.getElementById('restartBtn');
-
-    startBtn.addEventListener('click', () => {
-      startBtn.blur();
-      startBegin();
-    });
-    startBtn.addEventListener('touchend', e => { e.preventDefault(); startBegin(); });
 
     restartBtn.addEventListener('click', () => {
       restartBtn.blur();
       document.getElementById('gameOverScreen').classList.add('hidden');
-      if (window._gameScene && window._gameScene._begin) window._gameScene._begin();
+      if (window._gameScene) window._gameScene.restartFromGameOver();
     });
-    restartBtn.addEventListener('touchend', e => { e.preventDefault(); restartBtn.blur(); document.getElementById('gameOverScreen').classList.add('hidden'); if (window._gameScene && window._gameScene._begin) window._gameScene._begin(); });
+    restartBtn.addEventListener('touchend', e => {
+      e.preventDefault(); restartBtn.blur();
+      document.getElementById('gameOverScreen').classList.add('hidden');
+      if (window._gameScene) window._gameScene.restartFromGameOver();
+    });
 
-    // Touch D-pad (left side) + fire button (right side)
-    const dpad = this.add.container(0, 0).setDepth(100);
-    dpad.setScrollFactor(0);
-
-    // D-pad arrows
+    // Touch D-pad for P1 (left side)
+    const dpad1 = this.add.container(0, 0).setDepth(100);
+    dpad1.setScrollFactor(0);
     const arrowSize = 50;
-    const arrowColor = 0x00ff88;
-    const arrowAlpha = 0.3;
+    const arrowColor = 0x4488ff;
+    const arrowAlpha = 0.25;
 
-    // Up
-    const upBtn = this.add.rectangle(80, GAME_H - 120, arrowSize, arrowSize, arrowColor, arrowAlpha)
+    const upBtn = this.add.rectangle(80, GAME_H-120, arrowSize, arrowSize, arrowColor, arrowAlpha)
       .setInteractive({ useHandCursor: true }).setScrollFactor(0);
-    this.add.text(80, GAME_H - 120, '▲', { fontFamily: 'Press Start 2P', fontSize: '20px', color: '#00ff88' })
+    this.add.text(80, GAME_H-120, '▲', { fontFamily: 'Press Start 2P', fontSize: '18px', color: '#4488ff' })
       .setOrigin(0.5).setScrollFactor(0);
     upBtn.on('pointerdown', () => { this.queuedDir = DIR.UP; this.touchDir = DIR.UP; });
     upBtn.on('pointerup', () => { if (this.touchDir === DIR.UP) this.touchDir = DIR.NONE; });
     upBtn.on('pointerout', () => { if (this.touchDir === DIR.UP) this.touchDir = DIR.NONE; });
 
-    // Down
-    const downBtn = this.add.rectangle(80, GAME_H - 30, arrowSize, arrowSize, arrowColor, arrowAlpha)
+    const downBtn = this.add.rectangle(80, GAME_H-30, arrowSize, arrowSize, arrowColor, arrowAlpha)
       .setInteractive({ useHandCursor: true }).setScrollFactor(0);
-    this.add.text(80, GAME_H - 30, '▼', { fontFamily: 'Press Start 2P', fontSize: '20px', color: '#00ff88' })
+    this.add.text(80, GAME_H-30, '▼', { fontFamily: 'Press Start 2P', fontSize: '18px', color: '#4488ff' })
       .setOrigin(0.5).setScrollFactor(0);
     downBtn.on('pointerdown', () => { this.queuedDir = DIR.DOWN; this.touchDir = DIR.DOWN; });
     downBtn.on('pointerup', () => { if (this.touchDir === DIR.DOWN) this.touchDir = DIR.NONE; });
     downBtn.on('pointerout', () => { if (this.touchDir === DIR.DOWN) this.touchDir = DIR.NONE; });
 
-    // Left
-    const leftBtn = this.add.rectangle(80 - 65, GAME_H - 75, arrowSize, arrowSize, arrowColor, arrowAlpha)
+    const leftBtn = this.add.rectangle(80-65, GAME_H-75, arrowSize, arrowSize, arrowColor, arrowAlpha)
       .setInteractive({ useHandCursor: true }).setScrollFactor(0);
-    this.add.text(80 - 65, GAME_H - 75, '◄', { fontFamily: 'Press Start 2P', fontSize: '20px', color: '#00ff88' })
+    this.add.text(80-65, GAME_H-75, '◄', { fontFamily: 'Press Start 2P', fontSize: '18px', color: '#4488ff' })
       .setOrigin(0.5).setScrollFactor(0);
     leftBtn.on('pointerdown', () => { this.queuedDir = DIR.LEFT; this.touchDir = DIR.LEFT; });
     leftBtn.on('pointerup', () => { if (this.touchDir === DIR.LEFT) this.touchDir = DIR.NONE; });
     leftBtn.on('pointerout', () => { if (this.touchDir === DIR.LEFT) this.touchDir = DIR.NONE; });
 
-    // Right
-    const rightBtn = this.add.rectangle(80 + 65, GAME_H - 75, arrowSize, arrowSize, arrowColor, arrowAlpha)
+    const rightBtn = this.add.rectangle(80+65, GAME_H-75, arrowSize, arrowSize, arrowColor, arrowAlpha)
       .setInteractive({ useHandCursor: true }).setScrollFactor(0);
-    this.add.text(80 + 65, GAME_H - 75, '►', { fontFamily: 'Press Start 2P', fontSize: '20px', color: '#00ff88' })
+    this.add.text(80+65, GAME_H-75, '►', { fontFamily: 'Press Start 2P', fontSize: '18px', color: '#4488ff' })
       .setOrigin(0.5).setScrollFactor(0);
     rightBtn.on('pointerdown', () => { this.queuedDir = DIR.RIGHT; this.touchDir = DIR.RIGHT; });
     rightBtn.on('pointerup', () => { if (this.touchDir === DIR.RIGHT) this.touchDir = DIR.NONE; });
     rightBtn.on('pointerout', () => { if (this.touchDir === DIR.RIGHT) this.touchDir = DIR.NONE; });
 
-    // Fire button (right side)
-    const fireBtn = this.add.circle(GAME_W - 70, GAME_H - 70, 45, 0xff0000, 0.3)
+    // Fire button P1 (right side)
+    const fireBtn = this.add.circle(GAME_W-70, GAME_H-70, 45, 0xff4444, 0.25)
       .setInteractive({ useHandCursor: true }).setScrollFactor(0);
-    this.add.text(GAME_W - 70, GAME_H - 70, 'FIRE', { fontFamily: 'Press Start 2P', fontSize: '10px', color: '#ff0000' })
+    this.add.text(GAME_W-70, GAME_H-70, 'FIRE', { fontFamily: 'Press Start 2P', fontSize: '10px', color: '#ff4444' })
       .setOrigin(0.5).setScrollFactor(0);
-    fireBtn.on('pointerdown', () => { this.tryFire(); });
+    fireBtn.on('pointerdown', () => {
+      if (this.state === 'playing') this.tryFire();
+    });
+
+    // P2 touch controls (left half, different position)
+    const dpad2 = this.add.container(0, 0).setDepth(100);
+    dpad2.setScrollFactor(0);
+    const arrowColor2 = 0xff4444;
+    const arrowAlpha2 = 0.2;
+
+    const upBtn2 = this.add.rectangle(80, GAME_H-180, arrowSize, arrowSize, arrowColor2, arrowAlpha2)
+      .setInteractive({ useHandCursor: true }).setScrollFactor(0);
+    this.add.text(80, GAME_H-180, '▲', { fontFamily: 'Press Start 2P', fontSize: '18px', color: '#ff4444' })
+      .setOrigin(0.5).setScrollFactor(0);
+    upBtn2.on('pointerdown', () => { this.queuedDir2 = DIR.UP; this.touchDir2 = DIR.UP; });
+    upBtn2.on('pointerup', () => { if (this.touchDir2 === DIR.UP) this.touchDir2 = DIR.NONE; });
+    upBtn2.on('pointerout', () => { if (this.touchDir2 === DIR.UP) this.touchDir2 = DIR.NONE; });
+
+    const downBtn2 = this.add.rectangle(80, GAME_H-90, arrowSize, arrowSize, arrowColor2, arrowAlpha2)
+      .setInteractive({ useHandCursor: true }).setScrollFactor(0);
+    this.add.text(80, GAME_H-90, '▼', { fontFamily: 'Press Start 2P', fontSize: '18px', color: '#ff4444' })
+      .setOrigin(0.5).setScrollFactor(0);
+    downBtn2.on('pointerdown', () => { this.queuedDir2 = DIR.DOWN; this.touchDir2 = DIR.DOWN; });
+    downBtn2.on('pointerup', () => { if (this.touchDir2 === DIR.DOWN) this.touchDir2 = DIR.NONE; });
+    downBtn2.on('pointerout', () => { if (this.touchDir2 === DIR.DOWN) this.touchDir2 = DIR.NONE; });
+
+    const leftBtn2 = this.add.rectangle(80-65, GAME_H-135, arrowSize, arrowSize, arrowColor2, arrowAlpha2)
+      .setInteractive({ useHandCursor: true }).setScrollFactor(0);
+    this.add.text(80-65, GAME_H-135, '◄', { fontFamily: 'Press Start 2P', fontSize: '18px', color: '#ff4444' })
+      .setOrigin(0.5).setScrollFactor(0);
+    leftBtn2.on('pointerdown', () => { this.queuedDir2 = DIR.LEFT; this.touchDir2 = DIR.LEFT; });
+    leftBtn2.on('pointerup', () => { if (this.touchDir2 === DIR.LEFT) this.touchDir2 = DIR.NONE; });
+    leftBtn2.on('pointerout', () => { if (this.touchDir2 === DIR.LEFT) this.touchDir2 = DIR.NONE; });
+
+    const rightBtn2 = this.add.rectangle(80+65, GAME_H-135, arrowSize, arrowSize, arrowColor2, arrowAlpha2)
+      .setInteractive({ useHandCursor: true }).setScrollFactor(0);
+    this.add.text(80+65, GAME_H-135, '►', { fontFamily: 'Press Start 2P', fontSize: '18px', color: '#ff4444' })
+      .setOrigin(0.5).setScrollFactor(0);
+    rightBtn2.on('pointerdown', () => { this.queuedDir2 = DIR.RIGHT; this.touchDir2 = DIR.RIGHT; });
+    rightBtn2.on('pointerup', () => { if (this.touchDir2 === DIR.RIGHT) this.touchDir2 = DIR.NONE; });
+    rightBtn2.on('pointerout', () => { if (this.touchDir2 === DIR.RIGHT) this.touchDir2 = DIR.NONE; });
+
+    // Fire P2
+    const fireBtn2 = this.add.circle(GAME_W-70, GAME_H-135, 45, 0xff4444, 0.2)
+      .setInteractive({ useHandCursor: true }).setScrollFactor(0);
+    this.add.text(GAME_W-70, GAME_H-135, 'FIRE', { fontFamily: 'Press Start 2P', fontSize: '8px', color: '#ff4444' })
+      .setOrigin(0.5).setScrollFactor(0);
+    fireBtn2.on('pointerdown', () => {
+      if (this.state === 'playing' && this.player2 && this.player2.alive) this.tryFireP2();
+    });
   }
 
   update(time, delta) {
-    if (this.state !== 'playing') return;
     const dt = delta / 1000;
 
-    // Track dungeon time for speed-up
-    if (this.dungeonStartTime === 0) this.dungeonStartTime = time;
+    // Attract mode
+    if (this.attractMode) {
+      // Animate decorative enemies
+      this.attractDecor.forEach(e => {
+        if (!e.isDecor) return;
+        const move = e.decorSpeed * dt;
+        if (e.dir === DIR.LEFT || e.dir === DIR.RIGHT) e.y += 0;
+        else if (e.dir === DIR.UP || e.dir === DIR.DOWN) e.x += 0;
+
+        // Random direction changes
+        if (Math.random() < 0.01) {
+          e.dir = Phaser.Math.RND.pick([DIR.LEFT, DIR.RIGHT, DIR.UP, DIR.DOWN]);
+        }
+        e.x += DVEC[e.dir].x * move;
+        e.y += DVEC[e.dir].y * move;
+
+        // Wrap
+        if (e.x < -CELL) e.x = MAZE_W + CELL;
+        if (e.x > MAZE_W + CELL) e.x = -CELL;
+        if (e.y < -CELL) e.y = MAZE_H + CELL;
+        if (e.y > MAZE_H + CELL) e.y = -CELL;
+
+        // Clamp to bounds
+        e.x = Phaser.Math.Clamp(e.x, CELL, MAZE_W - CELL);
+        e.y = Phaser.Math.Clamp(e.y, CELL, MAZE_H - CELL);
+      });
+      return;
+    }
+
+    if (this.state !== 'playing') return;
     const elapsed = time - this.dungeonStartTime;
-    const speedMultiplier = 1 + Math.floor(elapsed / this.speedUpInterval) * 0.15; // 15% faster every 7s
+    const speedMultiplier = 1 + Math.floor(elapsed / this.speedUpInterval) * 0.15;
 
     this.handleInput();
 
-    // Player movement
+    // Player 1 movement
     if (this.player && this.player.alive) {
-      this.player.speed = 120 * Math.min(speedMultiplier, 3); // Cap at 3x
+      this.player.speed = 120 * Math.min(speedMultiplier, 3);
       this.moveEntity(this.player, dt);
     }
 
-    // Speed up all enemies
+    // Player 2 movement
+    if (this.player2 && this.player2.alive) {
+      this.player2.speed = 120 * Math.min(speedMultiplier, 3);
+      this.moveEntity(this.player2, dt);
+    }
+
+    // Enemies
     this.enemies.forEach(e => {
       if (!e.alive) return;
-      // Apply speed multiplier to base speed
       const baseSpeed = e.baseSpeed || e.speed;
       e.speed = baseSpeed * Math.min(speedMultiplier, 3);
       this.updateEnemyAI(e, dt, time);
@@ -796,22 +900,42 @@ class GameScene extends Phaser.Scene {
 
     this.handleBulletCollisions();
 
-    // Player hit by enemy bullet
+    // Player 1 hit by enemy bullet
     if (this.player && this.player.alive) {
       for (let i = this.enemyBullets.length - 1; i >= 0; i--) {
         const b = this.enemyBullets[i];
         if (Phaser.Math.Distance.Between(b.x, b.y, this.player.x, this.player.y) < 18) {
           b.destroy(); this.enemyBullets.splice(i, 1);
-          this.killPlayer(); break;
+          this.killCurrentPlayer(this.player, 'p1'); break;
         }
       }
     }
 
-    // Player contact with enemy
+    // Player 2 hit by enemy bullet
+    if (this.player2 && this.player2.alive) {
+      for (let i = this.enemyBullets.length - 1; i >= 0; i--) {
+        const b = this.enemyBullets[i];
+        if (Phaser.Math.Distance.Between(b.x, b.y, this.player2.x, this.player2.y) < 18) {
+          b.destroy(); this.enemyBullets.splice(i, 1);
+          this.killCurrentPlayer(this.player2, 'p2'); break;
+        }
+      }
+    }
+
+    // Player 1 contact with enemy
     if (this.player && this.player.alive) {
       for (const e of this.enemies) {
         if (e.alive && Phaser.Math.Distance.Between(e.x, e.y, this.player.x, this.player.y) < 26) {
-          this.killPlayer(); break;
+          this.killCurrentPlayer(this.player, 'p1'); break;
+        }
+      }
+    }
+
+    // Player 2 contact with enemy
+    if (this.player2 && this.player2.alive) {
+      for (const e of this.enemies) {
+        if (e.alive && Phaser.Math.Distance.Between(e.x, e.y, this.player2.x, this.player2.y) < 26) {
+          this.killCurrentPlayer(this.player2, 'p2'); break;
         }
       }
     }
@@ -820,21 +944,20 @@ class GameScene extends Phaser.Scene {
     if (this.backupActive) {
       this.backupTimer -= dt * 1000;
       if (this.backupTimer <= 0) {
-        // Auto-enter backup
-        if (this.player && !this.player.alive) {
-          this.player.x = this.backupX;
-          this.player.y = this.backupY;
-          this.player.gridCol = Math.floor(this.backupX / CELL);
-          this.player.gridRow = Math.floor(this.backupY / CELL);
-          this.player.dir = DIR.NONE;
-          this.player.queuedDir = DIR.NONE;
-          this.player.setVisible(true);
-          this.player.alive = true;
+        const targetPlayer = this.backupPlayer === 'p1' ? this.player : this.player2;
+        if (targetPlayer && !targetPlayer.alive) {
+          targetPlayer.x = this.backupX;
+          targetPlayer.y = this.backupY;
+          targetPlayer.gridCol = Math.floor(this.backupX / CELL);
+          targetPlayer.gridRow = Math.floor(this.backupY / CELL);
+          targetPlayer.dir = DIR.NONE;
+          targetPlayer.queuedDir = DIR.NONE;
+          targetPlayer.setVisible(true);
+          targetPlayer.alive = true;
           this.backupActive = false;
           if (this.backupGroup) { this.backupGroup.destroy(); this.backupGroup = null; }
         }
       }
-      // Update backup box visual
       if (this.backupGroup) {
         this.backupGroup.children.iterate(child => {
           if (child instanceof Phaser.GameObjects.Text) {
@@ -845,7 +968,7 @@ class GameScene extends Phaser.Scene {
       }
     }
 
-    // Spawn Worluk after all basic enemies dead
+    // Spawn Worluk
     const rem = this.enemies.filter(e => e.alive && (e.type === 'burwor' || e.type === 'garwor' || e.type === 'thorwor'));
     if (rem.length === 0 && !this.worlukSpawned) {
       this.worlukSpawned = true;
@@ -854,7 +977,7 @@ class GameScene extends Phaser.Scene {
       if (s) this.spawnEnemy('worluk', s.c*CELL+CELL/2, s.r*CELL+CELL/2);
     }
 
-    // Spawn Wizard after Worluk dead
+    // Spawn Wizard
     const wl = this.enemies.filter(e => e.alive && e.type === 'worluk');
     if (this.worlukSpawned && wl.length === 0 && !this.wizardSpawned) {
       this.wizardSpawned = true;
@@ -873,7 +996,8 @@ class GameScene extends Phaser.Scene {
       this.nextLevel(); return;
     }
 
-    this.drawRadar();
+    this.updateHUD();
+    this.drawCRT();
   }
 
   handleInput() {
@@ -885,6 +1009,23 @@ class GameScene extends Phaser.Scene {
     if (d === DIR.NONE) d = this.touchDir;
     if (d !== DIR.NONE) this.queuedDir = d;
     if (this.player) this.player.queuedDir = this.queuedDir;
+
+    // P2 input
+    let d2 = DIR.NONE;
+    if (this.numPadEnter.isDown) d2 = DIR.DOWN;
+    if (this.numPad0.isDown) d2 = DIR.UP;
+    // Also support WASD for P2
+    const wKey = this.input.keyboard.addKey('W');
+    const aKey = this.input.keyboard.addKey('A');
+    const sKey = this.input.keyboard.addKey('S');
+    const dKey = this.input.keyboard.addKey('D');
+    if (aKey.isDown) d2 = DIR.LEFT;
+    else if (dKey.isDown) d2 = DIR.RIGHT;
+    else if (wKey.isDown) d2 = DIR.UP;
+    else if (sKey.isDown) d2 = DIR.DOWN;
+    if (d2 === DIR.NONE) d2 = this.touchDir2;
+    if (d2 !== DIR.NONE) this.queuedDir2 = d2;
+    if (this.player2) this.player2.queuedDir = this.queuedDir2;
   }
 
   moveEntity(e, dt) {
@@ -892,13 +1033,11 @@ class GameScene extends Phaser.Scene {
     const cx = e.gridCol * CELL + CELL/2;
     const cy = e.gridRow * CELL + CELL/2;
 
-    // Lock perpendicular axis
     if (e.dir === DIR.LEFT || e.dir === DIR.RIGHT) e.y = cy;
     else if (e.dir === DIR.UP || e.dir === DIR.DOWN) e.x = cx;
 
     if (this.isCentered(e)) {
       e.x = cx; e.y = cy;
-      // 4-way joystick: tap to turn, hold to move (arcade style)
       if (e.queuedDir !== undefined && e.queuedDir !== DIR.NONE && this.canMove(e.gridCol, e.gridRow, e.queuedDir)) {
         e.dir = e.queuedDir;
       }
@@ -908,7 +1047,6 @@ class GameScene extends Phaser.Scene {
     e.x += DVEC[e.dir].x * move;
     e.y += DVEC[e.dir].y * move;
 
-    // Warp tunnels
     if (e.x < -CELL/2) e.x = MAZE_W + CELL/2;
     if (e.x > MAZE_W + CELL/2) e.x = -CELL/2;
 
@@ -928,7 +1066,6 @@ class GameScene extends Phaser.Scene {
       if (e.dir === DIR.RIGHT) e.setFlipX(false);
     }
 
-    // Glow halo
     if (e._halo) {
       e._halo.x = e.x; e._halo.y = e.y;
       e._halo.setAlpha(0.18 + 0.10 * Math.sin(performance.now() / 250));
@@ -936,15 +1073,11 @@ class GameScene extends Phaser.Scene {
   }
 
   updateEnemyAI(e, dt, time) {
-    // Fade effect for Garwor
     if (e.fades) {
       const a = 0.4 + 0.6 * Math.abs(Math.sin(time / 700));
       e.setAlpha(a);
     }
-    // Thorwor: fully invisible in maze (alpha=0), only visible on radar
-    if (e.invisible) {
-      e.setAlpha(0);
-    }
+    if (e.invisible) { e.setAlpha(0); }
 
     // Wizard teleporting
     if (e.teleports) {
@@ -959,7 +1092,7 @@ class GameScene extends Phaser.Scene {
             e.x = c * CELL + CELL/2; e.y = r * CELL + CELL/2;
             this.tweens.add({ targets: e, alpha: { from: 0, to: 1 }, duration: 200 });
             playWizardTaunt();
-            speakRobotic("Find me... The Wizard of Wor!");
+            this.showTaunt();
             break;
           }
         }
@@ -967,7 +1100,6 @@ class GameScene extends Phaser.Scene {
       }
     }
 
-    // Worluk: flees to warp doors
     if (e.flees) {
       if (e.escapeTimer > 0) e.escapeTimer = Math.max(0, e.escapeTimer - dt * 1000);
       if (this.isCentered(e)) {
@@ -981,16 +1113,16 @@ class GameScene extends Phaser.Scene {
         );
         if (opts.length) e.dir = opts[0];
         if (e.escapeTimer <= 0 && (e.x < 0 || e.x > MAZE_W)) {
-          this.score += e.points; this.updateHUD();
-          playWorlukSound(); this.playK('snd_warp');
-          e.alive = false; if (e._halo) { e._halo.destroy(); e._halo = null; }
+          this.score += e.points;
+          playWorlukSound();
+          e.alive = false;
+          if (e._halo) { e._halo.destroy(); e._halo = null; }
           e.destroy(); return;
         }
       }
       return;
     }
 
-    // Standard enemies: continuous corridor movement + player tracking
     if (this.isCentered(e) || e.dir === DIR.NONE || !this.canMove(e.gridCol, e.gridRow, e.dir)) {
       e.x = e.gridCol * CELL + CELL/2;
       e.y = e.gridRow * CELL + CELL/2;
@@ -1013,7 +1145,6 @@ class GameScene extends Phaser.Scene {
       if (e.dir === DIR.NONE) { e.dir = Phaser.Math.RND.pick([DIR.LEFT, DIR.RIGHT, DIR.UP, DIR.DOWN]); }
     }
 
-    // Enemy firing
     e.fireTimer -= dt * 1000;
     if (e.fireTimer <= 0) {
       e.fireTimer = Phaser.Math.Between(2500, 6000);
@@ -1089,25 +1220,19 @@ class GameScene extends Phaser.Scene {
 
     e._isTopView = (type === 'burwor' || type === 'garwor' || type === 'thorwor' || type === 'worluk');
 
-    // Arcade colors (matching original)
     const arcadeColors = {
-      burwor:  0x2244cc, // Blue wolf
-      garwor:  0xddaa00, // Yellow T-rex
-      thorwor: 0xcc2222, // Red scorpion
-      worluk:  0xddaa00, // Yellow insect
-      wizard:  0x2244cc  // Blue wizard
+      burwor: 0x2244cc, garwor: 0xddaa00, thorwor: 0xcc2222,
+      worluk: 0xddaa00, wizard: 0x2244cc
     };
 
-    // Glow halo matching arcade colors
     const halo = this.add.circle(x, y, CELL * 0.45, arcadeColors[type] || 0xffffff, 0.22);
     this.entityLayer.add(halo);
     halo.setDepth(e.depth - 1);
     e._halo = halo;
 
-    if (type === 'worluk') { e.dir = fleeRight ? DIR.RIGHT : DIR.LEFT; playWorlukSound(); this.playK('snd_warp'); }
-    if (type === 'wizard') { playWizardTaunt(); speakRobotic("You better hope you don't find me, the Wizard of Wor!"); this.playK('snd_wizard_teleport'); }
+    if (type === 'worluk') { e.dir = fleeRight ? DIR.RIGHT : DIR.LEFT; playWorlukSound(); }
+    if (type === 'wizard') { playWizardTaunt(); }
 
-    // Thorwor: fully invisible in maze (only visible on radar)
     if (cfg.invisible) e.setAlpha(0);
     else if (cfg.fades) e.setAlpha(cfg.visible);
 
@@ -1117,11 +1242,16 @@ class GameScene extends Phaser.Scene {
 
   clearAll() {
     this.entityLayer.removeAll(true);
-    this.bullets = []; this.enemyBullets = []; this.enemies = [];
+    this.bullets = [];
+    this.enemyBullets = [];
+    this.enemies = [];
     this.player = null;
-    this.worlukSpawned = false; this.wizardSpawned = false;
+    this.player2 = null;
+    this.worlukSpawned = false;
+    this.wizardSpawned = false;
     this.dungeonStartTime = 0;
-    this.backupActive = false; this.backupTimer = 0;
+    this.backupActive = false;
+    this.backupTimer = 0;
     if (this.backupGroup) { this.backupGroup.destroy(); this.backupGroup = null; }
   }
 
@@ -1129,22 +1259,22 @@ class GameScene extends Phaser.Scene {
     const g = this.mazeGfx;
     g.clear();
 
-    // Floor (dark)
+    // Floor
     g.fillStyle(0x0a0a1a, 1);
     g.fillRect(0, 0, MAZE_W, MAZE_H);
 
-    // Walls (bright with glow)
+    // Walls with color cycling (arcade accurate)
+    const wallColor = WALL_COLORS[this.level % 5];
+    const lighterColor = WALL_COLORS[(this.level + 1) % 5];
+
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
         if (this.maze[r][c] === 1) {
-          // Wall with neon glow
-          g.fillStyle(0x1122aa, 1);
+          g.fillStyle(wallColor, 1);
           g.fillRect(c * CELL, r * CELL, CELL, CELL);
-          // Inner wall detail
-          g.fillStyle(0x2244cc, 1);
+          g.fillStyle(lighterColor, 0.5);
           g.fillRect(c * CELL + 3, r * CELL + 3, CELL - 6, CELL - 6);
-          // Corner highlights
-          g.fillStyle(0x4466ff, 1);
+          g.fillStyle(0xffffff, 0.3);
           g.fillRect(c * CELL + 3, r * CELL + 3, 3, 3);
           g.fillRect(c * CELL + CELL - 6, r * CELL + 3, 3, 3);
           g.fillRect(c * CELL + 3, r * CELL + CELL - 6, 3, 3);
@@ -1153,14 +1283,15 @@ class GameScene extends Phaser.Scene {
       }
     }
 
-    // Warp tunnels (purple glow)
+    // Warp tunnels (pulsing purple)
     const midR1 = (ROWS/2-1)|0, midR2 = (ROWS/2)|0;
+    const tunnelPulse = 0.5 + 0.5 * Math.sin(performance.now() / 400);
     [midR1, midR2].forEach(r => {
-      g.fillStyle(0xff00ff, 1);
+      g.fillStyle(0xff00ff, tunnelPulse);
       g.fillRect(0, r * CELL, CELL, CELL);
-      g.fillStyle(0xff44ff, 1);
+      g.fillStyle(0xff44ff, 0.8);
       g.fillRect(CELL - 3, r * CELL, 3, CELL);
-      g.fillStyle(0xff44ff, 1);
+      g.fillStyle(0xff44ff, 0.8);
       g.fillRect(MAZE_W - CELL, r * CELL, 3, CELL);
     });
   }
@@ -1182,7 +1313,6 @@ class GameScene extends Phaser.Scene {
     const iw = MAZE_W - 32, ih = RADAR_H - 30;
     const sx = iw / MAZE_W, sy = ih / MAZE_H;
 
-    // Grid overlay
     g.lineStyle(1, 0x1a2a3a, 0.5);
     for (let r = 0; r <= ROWS; r++) {
       g.lineBetween(ix, iy + r * (ih / ROWS), ix + iw, iy + r * (ih / ROWS));
@@ -1191,33 +1321,35 @@ class GameScene extends Phaser.Scene {
       g.lineBetween(ix + c * (iw / COLS), iy, ix + c * (iw / COLS), iy + ih);
     }
 
-    // Player on radar (yellow dot)
+    // Player 1 (yellow)
     if (this.player && this.player.alive) {
       g.fillStyle(0xffea00, 1);
       g.fillRect(ix + this.player.x * sx - 3, iy + this.player.y * sy - 3, 6, 6);
     }
 
-    // Enemies on radar (colored per type — matches arcade)
+    // Player 2 (cyan)
+    if (this.player2 && this.player2.alive) {
+      g.fillStyle(0x44ffff, 1);
+      g.fillRect(ix + this.player2.x * sx - 3, iy + this.player2.y * sy - 3, 6, 6);
+    }
+
+    // Enemies
     this.enemies.forEach(e => {
       if (!e.alive) return;
       const cm = {
-        burwor: 0x2244cc, // Blue square
-        garwor: 0xddaa00, // Yellow square
-        thorwor: 0xcc2222, // Red square
-        worluk: 0xddaa00, // Yellow square
-        wizard: 0xff00ff  // Purple square
+        burwor: 0x2244cc, garwor: 0xddaa00, thorwor: 0xcc2222,
+        worluk: 0xddaa00, wizard: 0xff00ff
       };
       g.fillStyle(cm[e.type] || 0xffffff, 1);
       g.fillRect(ix + e.x * sx - 3, iy + e.y * sy - 3, 6, 6);
     });
 
-    // Backup warrior on radar (white)
+    // Backup warrior (white)
     if (this.backupActive && this.backupGroup) {
       g.fillStyle(0xffffff, 1);
       g.fillRect(ix + this.backupX * sx - 3, iy + this.backupY * sy - 3, 6, 6);
     }
 
-    // Radar sweep line
     this.radarSweepAngle = (this.radarSweepAngle || 0) + 0.04;
     const rcx = ix + iw / 2;
     const rcy = iy + ih / 2;
@@ -1226,12 +1358,100 @@ class GameScene extends Phaser.Scene {
     g.lineBetween(rcx, rcy, rcx + Math.cos(this.radarSweepAngle) * radius, rcy + Math.sin(this.radarSweepAngle) * radius);
   }
 
-  tryFire(dirOverride) {
+  updateHUD() {
+    this.hudGfx.clear();
+    const g = this.hudGfx;
+
+    // Top bar background
+    g.fillStyle(0x111133, 0.85);
+    g.fillRect(0, 0, GAME_W, 32);
+
+    // Score (yellow, left)
+    this.add.text(8, 6, 'SCORE: ' + formatScore(this.score), {
+      fontFamily: 'Press Start 2P', fontSize: '9px', color: '#ffea00'
+    });
+
+    // Player 1 lives (blue, center-left)
+    let p1str = '';
+    for (let i = 0; i < this.p1Lives; i++) p1str += '\u25C8 ';
+    this.add.text(280, 8, 'P1 ' + p1str.trim(), {
+      fontFamily: 'Press Start 2P', fontSize: '8px', color: '#4488ff'
+    });
+
+    // Player 2 lives (red, center)
+    let p2str = '';
+    for (let i = 0; i < this.p2Lives; i++) p2str += '\u25C6 ';
+    this.add.text(480, 8, 'P2 ' + p2str.trim(), {
+      fontFamily: 'Press Start 2P', fontSize: '8px', color: '#ff4444'
+    });
+
+    // Level (green, right)
+    this.add.text(GAME_W - 150, 6, 'DUNGEON ' + this.level, {
+      fontFamily: 'Press Start 2P', fontSize: '9px', color: '#00ff88'
+    });
+
+    // High score indicator
+    const hs = getHighScores();
+    if (hs.length > 0) {
+      this.add.text(GAME_W - 150, 20, 'HI: ' + formatScore(hs[0].score), {
+        fontFamily: 'Press Start 2P', fontSize: '7px', color: '#ff00ff'
+      });
+    }
+  }
+
+  drawCRT() {
+    const g = this.crtGfx;
+    g.clear();
+
+    // Scanlines
+    for (let y = 0; y < GAME_H; y += 3) {
+      g.fillStyle(0x000000, 0.12);
+      g.fillRect(0, y, GAME_W, 1);
+    }
+
+    // Vignette (darken corners)
+    for (let y = 0; y < 80; y += 2) {
+      const alpha = Math.min(0.3, y / 80 * 0.3);
+      g.fillStyle(0x000000, alpha);
+      g.fillRect(0, y, GAME_W, 2);
+      g.fillRect(0, GAME_H - y - 2, GAME_W, 2);
+    }
+    for (let x = 0; x < 80; x += 2) {
+      const alpha = Math.min(0.3, x / 80 * 0.3);
+      g.fillStyle(0x000000, alpha);
+      g.fillRect(x, 0, 2, GAME_H);
+      g.fillRect(GAME_W - x - 2, 0, 2, GAME_H);
+    }
+  }
+
+  showTaunt() {
+    if (this.tauntDisplay) this.tauntDisplay.destroy();
+    const taunts = [
+      "WARRIOR... THE WIZARD OF WOR!",
+      "YOU CANNOT DEFEAT ME!",
+      "I AM THE WIZARD OF WOR!",
+      "YOUR WORST NIGHTMARE!",
+      "HUNT ME IF YOU DARE!",
+      "THE WIZARD IS WATCHING!",
+      "YOU WILL NEVER CATCH ME!"
+    ];
+    this.tauntDisplay = this.add.text(MAZE_W/2, MAZE_H*0.15, taunts[Math.floor(Math.random()*taunts.length)], {
+      fontFamily: 'Press Start 2P', fontSize: '12px', color: '#ff00ff',
+      stroke: '#000000', strokeThickness: 4
+    }).setOrigin(0.5).setDepth(200);
+    this.tweens.add({
+      targets: this.tauntDisplay,
+      alpha: 0, y: MAZE_H*0.15 - 30,
+      duration: 2500,
+      onComplete: () => { this.tauntDisplay = null; }
+    });
+  }
+
+  tryFire() {
     if (this.state !== 'playing' || !this.player || !this.player.alive) return;
-    // Single-shot rule (arcade accurate)
     this.bullets.forEach(b => b.destroy()); this.bullets = [];
 
-    const d = dirOverride || (this.player.dir === DIR.NONE ? (this.player.queuedDir || DIR.RIGHT) : this.player.dir);
+    const d = this.player.dir === DIR.NONE ? (this.player.queuedDir || DIR.RIGHT) : this.player.dir;
     const vec = DVEC[d];
     if (!vec || (vec.x === 0 && vec.y === 0)) return;
 
@@ -1239,18 +1459,22 @@ class GameScene extends Phaser.Scene {
     b.vx = vec.x * 400; b.vy = vec.y * 400;
     if (vec.y !== 0) b.angle = 90;
     this.entityLayer.add(b); this.bullets.push(b);
-
     playShootSound();
   }
 
-  spawnEnemyBullet(e) {
-    const vec = DVEC[e.dir];
-    if (vec.x === 0 && vec.y === 0) return;
-    const b = this.add.image(e.x + vec.x * 16, e.y + vec.y * 16, 'ebullet');
-    b.vx = vec.x * 260; b.vy = vec.y * 260;
+  tryFireP2() {
+    if (this.state !== 'playing' || !this.player2 || !this.player2.alive) return;
+    this.enemyBullets.forEach(b => b.destroy()); this.enemyBullets = []; // Clean up enemy bullets for P2? No, keep them.
+
+    const d = this.player2.dir === DIR.NONE ? (this.player2.queuedDir || DIR.RIGHT) : this.player2.dir;
+    const vec = DVEC[d];
+    if (!vec || (vec.x === 0 && vec.y === 0)) return;
+
+    const b = this.add.image(this.player2.x + vec.x * 16, this.player2.y + vec.y * 16, 'bullet');
+    b.vx = vec.x * 400; b.vy = vec.y * 400;
     if (vec.y !== 0) b.angle = 90;
-    this.entityLayer.add(b); this.enemyBullets.push(b);
-    playEnemyShootSound();
+    this.entityLayer.add(b); this.bullets.push(b);
+    playShootSound();
   }
 
   handleBulletCollisions() {
@@ -1261,19 +1485,16 @@ class GameScene extends Phaser.Scene {
       for (const e of this.enemies) {
         if (!e.alive) continue;
         if (Phaser.Math.Distance.Between(b.x, b.y, e.x, e.y) < 22) {
-          // Double score: if Worluk was killed on a level that spawned him
           const isDoubleScore = this.worlukSpawned && !this.wizardSpawned;
           const pointsAwarded = (isDoubleScore && e.type === 'worluk') ? (e.points * 2) : e.points;
           this.score += pointsAwarded;
-          this.updateHUD();
           this.explodeAt(e.x, e.y, pointsAwarded);
 
-          // Double score banner
           if (isDoubleScore && e.type === 'worluk') {
             const doubleTxt = this.add.text(MAZE_W/2, MAZE_H/2 - 50, 'DOUBLE SCORE BONUS!', {
-              fontFamily: 'Press Start 2P', fontSize: '18px', color: '#ffea00'
+              fontFamily: 'Press Start 2P', fontSize: '16px', color: '#ffea00'
             }).setOrigin(0.5).setDepth(200);
-            this.tweens.add({ targets: doubleTxt, scale: 1.4, alpha: 0, duration: 1500, onComplete: () => doubleTxt.destroy() });
+            this.tweens.add({ targets: doubleTxt, scale: 1.3, alpha: 0, duration: 1500, onComplete: () => doubleTxt.destroy() });
           }
 
           e.alive = false;
@@ -1297,14 +1518,14 @@ class GameScene extends Phaser.Scene {
   }
 
   explodeAt(x, y, points) {
-    // Floating points popup
     if (points) {
-      const txt = this.add.text(x, y - 16, '+' + points, { fontFamily: 'Press Start 2P', fontSize: '11px', color: '#ffea00' });
+      const txt = this.add.text(x, y - 16, '+' + points, {
+        fontFamily: 'Press Start 2P', fontSize: '11px', color: '#ffea00'
+      });
       txt.setOrigin(0.5); txt.setDepth(100);
       this.tweens.add({ targets: txt, y: y - 48, alpha: 0, duration: 650, onComplete: () => txt.destroy() });
     }
 
-    // Explosion animation (pixel art)
     const exp = this.add.image(x, y, 'explosion');
     exp.setDisplaySize(CELL, CELL);
     this.entityLayer.add(exp);
@@ -1316,73 +1537,93 @@ class GameScene extends Phaser.Scene {
     playExplosionSound();
   }
 
-  killPlayer() {
+  killCurrentPlayer(entity, who) {
     if (this.state !== 'playing') return;
     this.state = 'dying';
-    this.explodeAt(this.player.x, this.player.y);
+    this.explodeAt(entity.x, entity.y);
     playHurtSound();
-    this.player.alive = false;
-    this.player.setVisible(false);
-    this.lives--;
+    entity.alive = false;
+    entity.setVisible(false);
+
+    if (who === 'p1') this.p1Lives--; else this.p2Lives--;
     this.updateHUD();
 
-    // Backup warrior mechanic (arcade accurate)
-    const safe = this.findOpenCell(this.maze, (COLS/2)|0, ROWS-3) || { c: 1, r: (ROWS/2)|0 };
-    const px = safe.c * CELL + CELL/2;
-    const py = safe.r * CELL + CELL/2;
-    this.backupX = px; this.backupY = py;
-    this.backupActive = true;
-    this.backupTimer = 10000; // 10 seconds
+    const isLastLife = (who === 'p1' && this.p1Lives <= 0) || (who === 'p2' && this.p2Lives <= 0);
 
-    // Draw backup box
+    if (isLastLife) {
+      // This player is out for good, set them up for respawn
+      this.backupPlayer = who;
+      const safe = this.findOpenCell(this.maze, (COLS/2)|0, ROWS-3) || { c: 1, r: (ROWS/2)|0 };
+      const px = safe.c * CELL + CELL/2;
+      const py = safe.r * CELL + CELL/2;
+      this.backupX = px; this.backupY = py;
+      this.backupActive = true;
+      this.backupTimer = 10000;
+      this.drawBackupBox(px, py, who);
+
+      this.time.delayedCall(900, () => {
+        // Respawn out-of-lives player at reserve
+        const target = who === 'p1' ? this.player : this.player2;
+        target.x = px; target.y = py;
+        target.gridCol = safe.c; target.gridRow = safe.r;
+        target.dir = DIR.NONE; target.queuedDir = DIR.NONE;
+        target.setVisible(true); target.alive = true;
+        this.state = 'playing';
+        this.backupActive = false;
+        if (this.backupGroup) { this.backupGroup.destroy(); this.backupGroup = null; }
+      });
+      return;
+    }
+
+    // Switch active player: the living player takes over
+    // For simplicity: both players can be on screen. The dead one waits.
+    // In true arcade: only one player is active at a time.
+    // We'll do: swap lives. The next player to die gets the backup.
+    // Simpler: just track lives separately, both on screen.
+    this.state = 'playing';
+  }
+
+  drawBackupBox(x, y, who) {
     if (this.backupGroup) this.backupGroup.destroy();
-    this.backupGroup = this.add.container(px, py).setDepth(15);
+    this.backupGroup = this.add.container(x, y).setDepth(15);
     const box = this.add.image(0, 0, 'backup').setDisplaySize(CELL, CELL);
     this.backupGroup.add(box);
-    const timerTxt = this.add.text(0, 0, '10', { fontFamily: 'Press Start 2P', fontSize: '10px', color: '#ffaa00' })
-      .setOrigin(0.5);
+    const color = who === 'p1' ? '#4488ff' : '#ff4444';
+    const label = this.add.text(0, -CELL/2 - 8, who === 'p1' ? 'P1' : 'P2', {
+      fontFamily: 'Press Start 2P', fontSize: '8px', color: color
+    }).setOrigin(0.5);
+    this.backupGroup.add(label);
+    const timerTxt = this.add.text(0, 0, '10', {
+      fontFamily: 'Press Start 2P', fontSize: '10px', color: '#ffaa00'
+    }).setOrigin(0.5);
     this.backupGroup.add(timerTxt);
 
-    // Glow
     const glow = this.add.circle(0, 0, CELL * 0.5, 0xffaa00, 0.3);
     this.backupGroup.add(glow);
-
-    this.time.delayedCall(900, () => {
-      if (this.lives < 0) { this.gameOver(); return; }
-      // Player respawns from backup
-      this.player.x = px; this.player.y = py;
-      this.player.gridCol = safe.c; this.player.gridRow = safe.r;
-      this.player.dir = DIR.NONE; this.player.queuedDir = DIR.NONE;
-      this.queuedDir = DIR.NONE;
-      this.player.setVisible(true);
-      this.player.alive = true;
-      this.state = 'playing';
-      this.backupActive = false;
-      if (this.backupGroup) { this.backupGroup.destroy(); this.backupGroup = null; }
-    });
   }
 
   nextLevel() {
     if (this.state !== 'playing') return;
     this.state = 'levelEnd';
-    this.playK('snd_dungeon_clear');
+    playDungeonClearSound();
 
     const overlay = this.add.container(0, 0).setDepth(200);
     const bg = this.add.rectangle(MAZE_W/2, MAZE_H/2, MAZE_W, MAZE_H, 0x000000, 0.85);
     overlay.add(bg);
 
     const isDoubleScore = this.worlukSpawned && !this.wizardSpawned;
-    const levelName = (this.level === 6) ? 'THE ARENA' : (this.level >= 13 && (this.level - 13) % 6 === 0 ? 'THE PIT' : 'DUNGEON ' + this.level);
+    const levelName = (this.level === 6) ? 'THE ARENA' :
+      (this.level >= 13 && (this.level - 13) % 6 === 0 ? 'THE PIT' : 'DUNGEON ' + this.level);
 
     let txt = this.add.text(MAZE_W/2, MAZE_H/2, levelName + (isDoubleScore ? '\nDOUBLE SCORE!' : ''), {
-      fontFamily: 'Press Start 2P', fontSize: '16px', color: isDoubleScore ? '#ffea00' : '#00ff88',
+      fontFamily: 'Press Start 2P', fontSize: '14px', color: isDoubleScore ? '#ffea00' : '#00ff88',
       align: 'center', lineSpacing: 14
     }).setOrigin(0.5);
     overlay.add(txt);
 
-    this.tweens.add({ targets: txt, scale: 1.4, duration: 2000, yoyo: true, repeat: 1 });
+    this.tweens.add({ targets: txt, scale: 1.3, duration: 2000, yoyo: true, repeat: 1 });
 
-    this.time.delayedCall(3000, () => {
+    this.time.delayedCall(2500, () => {
       overlay.destroy();
       this.level++;
       this.startLevel();
@@ -1390,27 +1631,78 @@ class GameScene extends Phaser.Scene {
   }
 
   gameOver() {
-    if (this.state !== 'playing') return;
     this.state = 'gameover';
-    this.playK('snd_gameover');
+    this.showCRT = false;
 
-    document.getElementById('finalScore').textContent = 'SCORE: ' + this.score;
-    document.getElementById('finalLevel').textContent = 'DUNGEON: ' + this.level;
-    document.getElementById('gameOverScreen').classList.remove('hidden');
+    saveScore(this.score, this.level);
+    const hs = getHighScores();
+    const isNewHigh = hs[0] && hs[0].score === this.score;
+
+    const overlay = this.add.container(0, 0).setDepth(200);
+    overlay.setSize(MAZE_W, GAME_H);
+    const bg = this.add.rectangle(MAZE_W/2, MAZE_H/2, MAZE_W, GAME_H, 0x000000, 0.95);
+    overlay.add(bg);
+
+    const title = this.add.text(MAZE_W/2, MAZE_H*0.25, 'GAME OVER', {
+      fontFamily: 'Press Start 2P', fontSize: '26px', color: '#ff0000'
+    }).setOrigin(0.5);
+    overlay.add(title);
+    this.tweens.add({ targets: title, scale: 1.1, duration: 1000, yoyo: true, repeat: -1 });
+
+    const scoreTxt = this.add.text(MAZE_W/2, MAZE_H*0.45, 'FINAL SCORE: ' + formatScore(this.score), {
+      fontFamily: 'Press Start 2P', fontSize: '12px', color: '#ffea00'
+    }).setOrigin(0.5);
+    overlay.add(scoreTxt);
+
+    const levelTxt = this.add.text(MAZE_W/2, MAZE_H*0.55, 'REACHED LEVEL: ' + this.level, {
+      fontFamily: 'Press Start 2P', fontSize: '10px', color: '#00ff88'
+    }).setOrigin(0.5);
+    overlay.add(levelTxt);
+
+    const p1livesTxt = this.add.text(MAZE_W/2, MAZE_H*0.63, 'P1 LIVES: ' + this.p1Lives, {
+      fontFamily: 'Press Start 2P', fontSize: '9px', color: '#4488ff'
+    }).setOrigin(0.5);
+    overlay.add(p1livesTxt);
+
+    const p2livesTxt = this.add.text(MAZE_W/2, MAZE_H*0.69, 'P2 LIVES: ' + this.p2Lives, {
+      fontFamily: 'Press Start 2P', fontSize: '9px', color: '#ff4444'
+    }).setOrigin(0.5);
+    overlay.add(p2livesTxt);
+
+    if (isNewHigh) {
+      this.add.text(MAZE_W/2, MAZE_H*0.77, 'NEW HIGH SCORE!', {
+        fontFamily: 'Press Start 2P', fontSize: '14px', color: '#ff00ff'
+      }).setOrigin(0.5).setDepth(201);
+    }
+
+    const restart = this.add.text(MAZE_W/2, MAZE_H*0.9, 'TAP OR PRESS ANY KEY', {
+      fontFamily: 'Press Start 2P', fontSize: '10px', color: '#ffea00'
+    }).setOrigin(0.5);
+    overlay.add(restart);
+    this.tweens.add({ targets: restart, alpha: 0.3, duration: 600, yoyo: true, repeat: -1 });
   }
 
-  updateHUD() {
-    document.getElementById('score').textContent = this.score;
-    document.getElementById('lives').textContent = this.lives;
-    document.getElementById('level').textContent = this.level;
+  restartFromGameOver() {
+    if (window._gameScene) window._gameScene._begin();
   }
 
-  _begin() {
-    document.getElementById('startScreen').classList.add('hidden');
-    document.getElementById('gameOverScreen').classList.add('hidden');
-    this.score = 0; this.lives = 3; this.level = 1;
+  startGame() {
+    this.attractMode = false;
+    // Destroy attract objects
+    if (this.attractTitle) { this.attractTitle.destroy(); this.attractTitle = null; }
+    if (this.attractInstr) { this.attractInstr.destroy(); this.attractInstr = null; }
+    if (this.attractTap) { this.attractTap.destroy(); this.attractTap = null; }
+    if (this.attractHs) { this.attractHs.destroy(); this.attractHs = null; }
+    // Destroy decorative enemies
+    this.attractDecor.forEach(e => { if (e._halo) e._halo.destroy(); e.destroy(); });
+    this.attractDecor = [];
+
+    this.score = 0;
+    this.p1Lives = 3;
+    this.p2Lives = 3;
+    this.level = 1;
     this.updateHUD();
-    speakRobotic("WARRIOR! PREPARE FOR BATTLE!");
+    playDragnetTheme();
     this.startLevel();
   }
 
@@ -1418,20 +1710,42 @@ class GameScene extends Phaser.Scene {
     this.clearAll();
     this.maze = generateMaze(this.level);
     this.drawMaze();
-
-    // Play Dragnet theme (5-note opening)
-    playDragnetTheme();
+    playLevelStart();
 
     const midR = (ROWS/2)|0;
 
-    // Player spawn
-    let pCol = (COLS/2)|0, pRow = ROWS-3;
-    const pSafe = this.findOpenCell(this.maze, pCol, pRow);
-    if (pSafe) { pCol = pSafe.c; pRow = pSafe.r; }
-    const px = pCol * CELL + CELL/2, py = pRow * CELL + CELL/2;
-    this.player = this.spawnEntity('player', px, py, { type: 'player', speed: 120, baseSpeed: 120, dir: DIR.NONE, alive: true });
+    // Player 1 spawn (bottom center)
+    let p1Col = (COLS/2)|0, p1Row = ROWS-3;
+    const p1Safe = this.findOpenCell(this.maze, p1Col, p1Row);
+    if (p1Safe) { p1Col = p1Safe.c; p1Row = p1Safe.r; }
+    const p1x = p1Col * CELL + CELL/2, p1y = p1Row * CELL + CELL/2;
+    this.player = this.spawnEntity('player1', p1x, p1y, {
+      type: 'player', speed: 120, baseSpeed: 120, dir: DIR.NONE, alive: true
+    });
 
-    // Enemy spawning (max 6 on screen at once — arcade accurate)
+    // Player 2 spawn (reserves, left side)
+    let p2Col = 3, p2Row = ROWS-3;
+    const p2Safe = this.findOpenCell(this.maze, p2Col, p2Row);
+    if (p2Safe) { p2Col = p2Safe.c; p2Row = p2Safe.r; }
+    const p2x = p2Col * CELL + CELL/2, p2y = p2Row * CELL + CELL/2;
+    this.player2 = this.spawnEntity('player2', p2x, p2y, {
+      type: 'player', speed: 120, baseSpeed: 120, dir: DIR.DOWN, alive: true
+    });
+    this.player2.queuedDir = DIR.DOWN;
+
+    // Player 2 glow (red instead of blue)
+    if (this.player2Glow) this.player2Glow.destroy();
+    this.player2Glow = this.add.circle(p2x, p2y, CELL * 0.55, 0xff4444, 0.25);
+    this.entityLayer.add(this.player2Glow);
+    this.player2Glow.setDepth(this.player2.depth - 1);
+
+    // Player 1 glow (blue)
+    if (this.playerGlow) this.playerGlow.destroy();
+    this.playerGlow = this.add.circle(p1x, p1y, CELL * 0.55, 0x4488ff, 0.25);
+    this.entityLayer.add(this.playerGlow);
+    this.playerGlow.setDepth(this.player.depth - 1);
+
+    // Enemies (max 6 on screen, arcade accurate)
     const enemyCount = Math.min(6 + this.level, 10);
     const types = [];
     for (let i = 0; i < enemyCount; i++) {
@@ -1441,7 +1755,6 @@ class GameScene extends Phaser.Scene {
       else types.push('burwor');
     }
 
-    // Canonical spawn positions (arcade accurate)
     const sp = [[2, 2], [2, 6], [2, 10], [2, 14], [2, 18], [4, 4], [4, 18], [midR, 2], [midR, COLS-3]];
     types.forEach((t, i) => {
       const p = sp[i % sp.length];
@@ -1450,13 +1763,15 @@ class GameScene extends Phaser.Scene {
       this.spawnEnemy(t, safe.c * CELL + CELL/2, safe.r * CELL + CELL/2);
     });
 
-    this.worlukSpawned = false; this.wizardSpawned = false;
+    this.worlukSpawned = false;
+    this.wizardSpawned = false;
     this.state = 'playing';
+    this.dungeonStartTime = this.time.now;
   }
 }
 
 // ============================================================
-// PHASER CONFIG + INIT
+// PHASER CONFIG
 // ============================================================
 
 const config = {
@@ -1470,21 +1785,6 @@ const config = {
 };
 
 const game = new Phaser.Game(config);
-
-// ============================================================
-// START SCREEN
-// ============================================================
-
-function startBegin() {
-  document.getElementById('startScreen').classList.add('hidden');
-  (function tryB(n) {
-    if (window._gameScene && window._gameScene._begin) {
-      window._gameScene._begin(); return;
-    }
-    if (n > 50) return;
-    setTimeout(() => tryB(n + 1), 100);
-  })(0);
-}
 
 </script>
 </body>
