@@ -34,7 +34,8 @@ html, body { width:100%; height:100%; background:#000; overflow:hidden; touch-ac
     <button class="restart-btn" id="restartBtn">TRY AGAIN</button>
   </div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.js"></script>
 <script>
 // ============================================================
 // WIZARD OF WOR — Arcade Faithful Recreation (1981 Midway)
@@ -1551,36 +1552,63 @@ class GameScene extends Phaser.Scene {
     const isLastLife = (who === 'p1' && this.p1Lives <= 0) || (who === 'p2' && this.p2Lives <= 0);
 
     if (isLastLife) {
-      // This player is out for good, set them up for respawn
-      this.backupPlayer = who;
-      const safe = this.findOpenCell(this.maze, (COLS/2)|0, ROWS-3) || { c: 1, r: (ROWS/2)|0 };
-      const px = safe.c * CELL + CELL/2;
-      const py = safe.r * CELL + CELL/2;
-      this.backupX = px; this.backupY = py;
-      this.backupActive = true;
-      this.backupTimer = 10000;
-      this.drawBackupBox(px, py, who);
+      // Last life for this player — trigger game over
+      this.state = 'gameover';
+      this.showCRT = false;
+      saveScore(this.score, this.level);
+      const hs = getHighScores();
+      const isNewHigh = hs[0] && hs[0].score === this.score;
 
-      this.time.delayedCall(900, () => {
-        // Respawn out-of-lives player at reserve
-        const target = who === 'p1' ? this.player : this.player2;
-        target.x = px; target.y = py;
-        target.gridCol = safe.c; target.gridRow = safe.r;
-        target.dir = DIR.NONE; target.queuedDir = DIR.NONE;
-        target.setVisible(true); target.alive = true;
-        this.state = 'playing';
-        this.backupActive = false;
-        if (this.backupGroup) { this.backupGroup.destroy(); this.backupGroup = null; }
-      });
+      const overlay = this.add.container(0, 0).setDepth(200);
+      overlay.setSize(MAZE_W, GAME_H);
+      const bg = this.add.rectangle(MAZE_W/2, MAZE_H/2, MAZE_W, GAME_H, 0x000000, 0.95);
+      overlay.add(bg);
+
+      this.add.text(MAZE_W/2, MAZE_H*0.25, 'GAME OVER', {
+        fontFamily: 'Press Start 2P', fontSize: '26px', color: '#ff0000'
+      }).setOrigin(0.5).setDepth(201);
+      this.tweens.add({ targets: overlay.children[0], scale: 1.05, duration: 1000, yoyo: true, repeat: -1 });
+
+      this.add.text(MAZE_W/2, MAZE_H*0.45, 'SCORE: ' + formatScore(this.score), {
+        fontFamily: 'Press Start 2P', fontSize: '14px', color: '#ffea00'
+      }).setOrigin(0.5).setDepth(201);
+
+      this.add.text(MAZE_W/2, MAZE_H*0.55, 'LEVEL: ' + this.level, {
+        fontFamily: 'Press Start 2P', fontSize: '11px', color: '#00ff88'
+      }).setOrigin(0.5).setDepth(201);
+
+      if (isNewHigh) {
+        this.add.text(MAZE_W/2, MAZE_H*0.68, 'NEW HIGH SCORE!', {
+          fontFamily: 'Press Start 2P', fontSize: '14px', color: '#ff00ff'
+        }).setOrigin(0.5).setDepth(201);
+      }
+
+      const restart = this.add.text(MAZE_W/2, MAZE_H*0.85, 'TAP OR PRESS ANY KEY', {
+        fontFamily: 'Press Start 2P', fontSize: '10px', color: '#ffea00'
+      }).setOrigin(0.5).setDepth(201);
+      this.tweens.add({ targets: restart, alpha: 0.3, duration: 600, yoyo: true, repeat: -1 });
       return;
     }
 
-    // Switch active player: the living player takes over
-    // For simplicity: both players can be on screen. The dead one waits.
-    // In true arcade: only one player is active at a time.
-    // We'll do: swap lives. The next player to die gets the backup.
-    // Simpler: just track lives separately, both on screen.
-    this.state = 'playing';
+    // Not last life — respawn this player at reserve position
+    this.backupPlayer = who;
+    const safe = this.findOpenCell(this.maze, (COLS/2)|0, ROWS-3) || { c: 1, r: (ROWS/2)|0 };
+    const px = safe.c * CELL + CELL/2;
+    const py = safe.r * CELL + CELL/2;
+    this.backupX = px; this.backupY = py;
+    this.backupActive = true;
+    this.backupTimer = 10000;
+    this.drawBackupBox(px, py, who);
+
+    this.time.delayedCall(1000, () => {
+      const target = who === 'p1' ? this.player : this.player2;
+      target.x = px; target.y = py;
+      target.gridCol = safe.c; target.gridRow = safe.r;
+      target.dir = DIR.NONE; target.queuedDir = DIR.NONE;
+      target.setVisible(true); target.alive = true;
+      this.backupActive = false;
+      if (this.backupGroup) { this.backupGroup.destroy(); this.backupGroup = null; }
+    });
   }
 
   drawBackupBox(x, y, who) {
