@@ -42,10 +42,14 @@ html, body { width:100%; height:100%; background:#000; overflow:hidden; touch-ac
 // Refactored: 2-player co-op, attract mode, CRT, color walls
 // ============================================================
 
+// Arcade-accurate dimensions
 const COLS = 22, ROWS = 14, CELL = 48;
 const MAZE_W = COLS * CELL, MAZE_H = ROWS * CELL;
 const RADAR_H = 64;
 const GAME_W = MAZE_W, GAME_H = MAZE_H + RADAR_H;
+
+// Sprite sizes - arcade uses 8x8 pixel art
+const SPRITE_SIZE = 48;
 
 const DIR = { NONE:0, LEFT:1, RIGHT:2, UP:3, DOWN:4 };
 const DVEC = {
@@ -55,6 +59,61 @@ const DVEC = {
 
 // Arcade-accurate wall color cycling (5 colors)
 const WALL_COLORS = [0x2244cc, 0x22cc44, 0xcc2222, 0xcccc22, 0x22cccc];
+
+// Player colors - P1 is YELLOW, P2 is BLUE (arcade accurate)
+const P1_COLOR = 0xffea00;  // Yellow
+const P2_COLOR = 0x4488ff;  // Blue
+
+// Fixed maze templates (arcade uses 20-30 set layouts)
+const MAZE_TEMPLATES = [
+  // Template 0: Simple corridors
+  [
+    "1111111111111111111111",
+    "1000000000000000000001",
+    "1011101110111011101111",
+    "1000000000000000000001",
+    "1011101110111011101111",
+    "1000000000000000000001",
+    "1111101110111011101111",
+    "1000000000000000000001",
+    "1011101110111011101111",
+    "1000000000000000000001",
+    "1011101110111011101111",
+    "1000000000000000000001",
+    "1011101110111011101111",
+    "1111111111111111111111"
+  ],
+  // Template 1: Zigzag
+  [
+    "1111111111111111111111",
+    "1000000000000000000001",
+    "1010101010101010101011",
+    "1000000000000000000001",
+    "1010101010101010101011",
+    "1000000000000000000001",
+    "1010101010101010101011",
+    "1000000000000000000001",
+    "1010101010101010101011",
+    "1000000000000000000001",
+    "1010101010101010101011",
+    "1000000000000000000001",
+    "1010101010101010101011",
+    "1111111111111111111111"
+  ]
+];
+
+// Helper to convert string template to 2D array
+function parseMazeTemplate(template) {
+  const result = [];
+  for (let r = 0; r < ROWS; r++) {
+    const row = [];
+    for (let c = 0; c < COLS; c++) {
+      row.push(template[r][c] === '1' ? 1 : 0);
+    }
+    result.push(row);
+  }
+  return result;
+}
 
 // ============================================================
 // HIGH SCORE PERSISTENCE
@@ -668,7 +727,7 @@ class GameScene extends Phaser.Scene {
     if (this.attractTap) this.attractTap.destroy();
     if (this.attractHs) this.attractHs.destroy();
 
-    this.attractTitle = this.add.text(MAZE_W/2, MAZE_H*0.25, 'WIZARD OF WOR', {
+    this.attractTitle = this.add.text(MAZE_W/2, MAZE_H*0.25, 'WIZARD OF WOR v1.0', {
       fontFamily: 'Press Start 2P', fontSize: '20px', color: '#ff00ff'
     }).setOrigin(0.5);
 
