@@ -43,9 +43,10 @@ function spawnMush(){
 function updateCenti(c){
   const head=c.segs[0];
   
-  // Snake downward movement (1 pixel per second)
+  // Snake downward movement (slow constant descent - 1 pixel every 30 frames)
+  if(!c.frameCount)c.frameCount=0;
   c.frameCount++;
-  if(c.frameCount%60===0){head.y+=1.5;}
+  if(c.frameCount%30===0){head.y+=1;}
   
   // Mushroom collision turns
   for(let i=0;i<mushrooms.length;i++){
