@@ -2,11 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Centipede</title>
 <style>
 html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#000;color:#fff;font-family:"Courier New",monospace}
 canvas{display:block;width:100%;height:100%}
+#debug{position:fixed;top:0;left:0;background:rgba(0,0,0,.8);color:#0f0;font-size:10px;padding:4px;z-index:10;white-space:pre;line-height:1.3;display:none}
 .btn{position:fixed;z-index:5;width:76px;height:76px;border-radius:50%;background:rgba(10,30,20,.8);color:#8f9;font-size:24px;display:none;align-items:center;justify-content:center}
 .left{left:12px;bottom:24px}.right{left:104px;bottom:24px}.fire{right:12px;bottom:24px}
 @media(pointer:coarse){.btn{display:flex}}
@@ -14,192 +15,225 @@ canvas{display:block;width:100%;height:100%}
 </head>
 <body>
 <canvas id="game"></canvas>
+
 <div class="btn left">◀</div>
 <div class="btn right">▶</div>
 <div class="btn fire">●</div>
 <script>
 const canvas=document.getElementById('game');
 const ctx=canvas.getContext('2d');
+const debugEl=document.getElementById('debug');
 
 let W,H,ship,bullets=[],centipedes=[],mushrooms=[];
 let score=0,lives=3,wave=1,gameOver=false;
 let keys={left:false,right:false,fire:false};
 
+const FIELD_W=320;
+let initDone=false;
+let collisionCount=0;
+
 function resize(){W=canvas.width=window.innerWidth;H=canvas.height=window.innerHeight;}
-resize();
 
 function spawnCenti(){
   const segs=[];
-  for(let i=0;i<9;i++)segs.push({x:Math.random()*W,y:-i*10,w:10,h:7});
-  centipedes.push({segs:segs,dirX:1,speed:1.2,waveColor:wave,frameCount:0});
+  const startX=Math.random()*FIELD_W*0.7;
+  for(let i=0;i<9;i++){
+    segs.push({x:startX+i*8,y:-i*6-5,w:7,h:5});
+  }
+  centipedes.push({segs,dirX:1,speed:2,waveColor:wave,frameCount:0});
 }
 
 function spawnMush(){
-  for(let r=0;r<5;r++)for(let c=0;c<8;c++){
-    mushrooms.push({x:16+c*40,y:14+r*28,w:20,h:16,hp:4});
+  const COLS=10;const ROWS=6;
+  const mushW=FIELD_W/COLS;
+  for(let r=0;r<ROWS;r++){
+    for(let c=0;c<COLS;c++){
+      mushrooms.push({x:mushW*c+mushW/2,y:50+r*24,w:mushW*0.7,h:16,hp:4});
+    }
   }
 }
 
 function updateCenti(c){
   const head=c.segs[0];
-  
-  // Snake downward movement (slow constant descent - 1 pixel every 30 frames)
   if(!c.frameCount)c.frameCount=0;
   c.frameCount++;
-  if(c.frameCount%30===0){head.y+=1;}
-  
-  // Mushroom collision turns
+  if(c.frameCount%8===0){head.y+=1;}
+
+  // Mushroom collision turns head
   for(let i=0;i<mushrooms.length;i++){
     const m=mushrooms[i];
     if(head.x+head.w/2>m.x-m.w/2&&head.x-head.w/2<m.x+m.w/2&&
        head.y+head.h/2>m.y-m.h/2&&head.y-head.h/2<m.y+m.h/2){
-      c.dirX*=-1;head.y+=28;break;
+      c.dirX*=-1;head.y+=16;break;
     }
   }
-  
-  // Wall bounce
-  if(head.x<0||head.x>W){c.dirX*=-1;head.y+=8;}
-  
-  // Move head
+
+  if(head.x<0||head.x>FIELD_W){c.dirX*=-1;head.y+=8;}
   head.x+=c.dirX*c.speed;
-  
-  // Follow the leader
+
   for(let i=1;i<c.segs.length;i++){
     const prev=c.segs[i-1];const curr=c.segs[i];
     const dx=prev.x-curr.x,dy=prev.y-curr.y;
     const dist=Math.hypot(dx,dy);
     if(dist>0){const step=Math.min(c.speed*0.8,dist);curr.x+=dx/dist*step;curr.y+=dy/dist*step;}
   }
-  
-  // Mushroom collision damage
+
   for(let si=c.segs.length-1;si>=0;si--){
     const seg=c.segs[si];
     for(let mi=mushrooms.length-1;mi>=0;mi--){
       const m=mushrooms[mi];
-      if(Math.hypot(seg.x-m.x,seg.y-m.y)<m.w/2+5){
-        m.hp--;if(m.hp<=0)mushrooms.splice(mi,1);else{m.w=m.w*(m.hp/4);m.h=m.h*(m.hp/4);}
+      if(Math.hypot(seg.x-m.x,seg.y-m.y)<m.w/2+4){
+        m.hp--;if(m.hp<=0)mushrooms.splice(mi,1);else{m.w*=0.75;m.h*=0.75;}
       }
     }
   }
+
+  if(head.y>H-20){gameOver=true;}
+}
+
+function drawCenti(c,ox,oy){
+  for(let i=0;i<c.segs.length;i++){
+    const seg=c.segs[i];
+    ctx.fillStyle=i===0?'#ff4422':'#cc3311';
+    ctx.fillRect(ox+seg.x-seg.w/2,oy+seg.y-seg.h/2,seg.w,seg.h);
+  }
+}
+
+function drawMush(m,ox,oy){
+  ctx.fillStyle='#4a6040';ctx.fillRect(ox+m.x-2,oy+m.y+1,4,m.h/2);
+  ctx.fillStyle='#3a8030';ctx.beginPath();ctx.arc(ox+m.x,oy+m.y-2,m.w/2,Math.PI,Math.PI*2);ctx.fill();
 }
 
 function checkCollisions(){
+  // Bullet-centipede
   for(let bi=bullets.length-1;bi>=0;bi--){
     const b=bullets[bi];
     for(let ci=centipedes.length-1;ci>=0;ci--){
       const c=centipedes[ci];
       for(let sk=c.segs.length-1;sk>=0;sk--){
         const seg=c.segs[sk];
-        if(b.x<seg.x+seg.w/2&&b.x>seg.x-seg.w/2&&b.y<seg.y+seg.h/2&&b.y>seg.y-seg.h/2){
-          bullets.splice(bi,1);
-          if(sk===0){
-            c.segs.splice(0,1);
-            if(c.segs.length===0)centipedes.splice(ci,1);
-          }else{
-            const tail=c.segs.splice(sk);tail.shift();
-            if(tail.length>0)centipedes.push({segs:tail,dirX:c.dirX,speed:c.speed,waveColor:c.waveColor,frameCount:0});
-          }
+        if(b.x>seg.x-seg.w/2&&b.x<seg.x+seg.w/2&&b.y>seg.y-seg.h/2&&b.y<seg.y+seg.h/2){
+          bullets.splice(bi,1);score+=10;
+          if(sk===0){c.segs.splice(0,1);if(c.segs.length===0)centipedes.splice(ci,1);}
+          else{const head=c.segs.splice(0,sk+1);const tail=c.segs.splice(0);if(tail.length>0)centipedes.push({segs:tail,dirX:c.dirX,speed:c.speed,waveColor:c.waveColor,frameCount:0});}
           break;
         }
       }
     }
   }
-  
-  // Ship collision
-  if(ship){
+
+  // Ship-centipede - only check if centipede is actually in ship's Y range
+  if(ship&&!gameOver){
     for(let ci=0;ci<centipedes.length;ci++){
-      const c=centipedes[ci];
+      const c=centipedes[ci];let hit=false;
       for(let si=0;si<c.segs.length;si++){
         const seg=c.segs[si];
-        if(ship.x<seg.x+seg.w/2&&ship.x+12>seg.x-seg.w/2&&ship.y<seg.y+seg.h/2&&ship.y+5>seg.y-seg.h/2){
-          lives--;if(lives<=0)gameOver=true;else ship={x:W/2,y:H-30};
+        // Ship rect: x=[ship.x-12, ship.x+12], y=[ship.y, ship.y+10]
+        // Only check collision if centipede is in the bottom portion of screen where ship lives
+        const segBottom=seg.y+seg.h/2;
+        const segTop=seg.y-seg.h/2;
+        // Ship is at ship.y (bottom of screen area)
+        if(segTop<ship.y+10&&segBottom>ship.y){
+          if(ship.x>seg.x-seg.w/2-12&&ship.x<seg.x+seg.w/2+12){
+            hit=true;break;
+          }
         }
+      }
+      if(hit){
+        collisionCount++;
+        lives--;centipedes.splice(ci,1);
+        if(lives<=0)gameOver=true;
+        else ship={x:FIELD_W/2,y:H-30};
       }
     }
   }
 }
 
-function drawCenti(c){
-  for(let i=0;i<c.segs.length;i++){
-    const seg=c.segs[i];
-    ctx.fillStyle=i===0?'#e84030':'#c84020';
-    ctx.fillRect(seg.x-seg.w/2,seg.y-seg.h/2,seg.w,seg.h);
-  }
-}
-
-function drawMush(m){
-  ctx.fillStyle='#4a6040';ctx.fillRect(m.x-2,m.y+1,4,m.h/2);
-  ctx.fillStyle='#3a8030';ctx.beginPath();ctx.arc(m.x,m.y-2,m.w/2,Math.PI,Math.PI*2);ctx.fill();
-}
-
 function loop(){
+  ctx.fillStyle='#051a0a';ctx.fillRect(0,0,W,H);
+
+  const ox=(W-FIELD_W)/2;
+  const oy=30;
+
   if(!gameOver){
-    ctx.fillStyle='#051a0a';ctx.fillRect(0,0,W,H);
-    
-    // Update ship position
-    if(keys.left)ship.x=Math.max(12,ship.x-5);
-    if(keys.right)ship.x=Math.min(W-12,ship.x+5);
-    
+    // Update ship (field coords)
+    if(keys.left)ship.x=Math.max(12,ship.x-6);
+    if(keys.right)ship.x=Math.min(FIELD_W-12,ship.x+6);
+
     // Fire bullet
-    if(keys.fire&&bullets.length<5){keys.fire=false;bullets.push({x:ship.x,y:ship.y-5,dy:-8});}
-    
+    if(keys.fire&&bullets.length<5){keys.fire=false;bullets.push({x:ship.x,y:ship.y-8,dy:-10});}
+
     // Update centipedes
     for(let i=centipedes.length-1;i>=0;i--)updateCenti(centipedes[i]);
-    
+
     // Update bullets
     for(let i=bullets.length-1;i>=0;i--){bullets[i].y+=bullets[i].dy;if(bullets[i].y<-10)bullets.splice(i,1);}
-    
+
     // Check collisions
     checkCollisions();
-    
-    // Draw everything
-    for(let i=0;i<mushrooms.length;i++)drawMush(mushrooms[i]);
-    for(let i=0;i<centipedes.length;i++)drawCenti(centipedes[i]);
-    for(let i=0;i<bullets.length;i++){ctx.fillStyle='#ffa020';ctx.fillRect(bullets[i].x-1,bullets[i].y,3,6);}
-    if(ship){ctx.fillStyle='#2a6aaa';ctx.fillRect(ship.x-12,ship.y,24,10);}
-    
+
+    // Draw everything in field coords + offset
+    for(let i=0;i<mushrooms.length;i++)drawMush(mushrooms[i],ox,oy);
+    for(let i=0;i<centipedes.length;i++)drawCenti(centipedes[i],ox,oy);
+    for(let i=0;i<bullets.length;i++){ctx.fillStyle='#ffa020';ctx.fillRect(ox+bullets[i].x-1,oy+bullets[i].y,3,6);}
+    if(ship){ctx.fillStyle='#2a6aaa';ctx.fillRect(ox+ship.x-12,oy+ship.y,24,10);}
+
+    // Field border
+    ctx.strokeStyle='#336633';ctx.lineWidth=2;ctx.strokeRect(ox,oy,FIELD_W,H-oy);
+
     // HUD
-    ctx.fillStyle='#fff';ctx.font='bold 14px monospace';ctx.fillText('SCORE '+score,12,24);
-    ctx.fillText('LIVES '+lives,12,40);ctx.fillText('WAVE '+wave,W-80,24);
+    ctx.fillStyle='#fff';ctx.font='bold 14px monospace';
+    ctx.fillText('SCORE '+score,12,20);ctx.fillText('LIVES '+lives,12,38);
+    ctx.fillText('WAVE '+wave,W-70,24);
+
   }else{
-    ctx.fillStyle='#f66';ctx.font='bold 28px monospace';ctx.fillText('GAME OVER',W/2-80,H/2);
+    for(let i=0;i<mushrooms.length;i++)drawMush(mushrooms[i],ox,oy);
+    for(let i=0;i<centipedes.length;i++)drawCenti(centipedes[i],ox,oy);
+    ctx.strokeStyle='#336633';ctx.lineWidth=2;ctx.strokeRect(ox,oy,FIELD_W,H-oy);
+    ctx.fillStyle='#f66';ctx.font='bold 28px monospace';
+    ctx.fillText('GAME OVER',W/2-80,H/2);
   }
+
+
+
   requestAnimationFrame(loop);
 }
 
-// Input handlers
-document.addEventListener('keydown',e=>{
+// Input handlers - keyboard
+document.addEventListener('keydown',function(e){
   if(e.key==='ArrowLeft')keys.left=true;
   if(e.key==='ArrowRight')keys.right=true;
   if(e.key===' ')keys.fire=true;
+  if(['ArrowLeft','ArrowRight',' '].includes(e.key))e.preventDefault();
 });
 
-document.addEventListener('keyup',e=>{
+document.addEventListener('keyup',function(e){
   if(e.key==='ArrowLeft')keys.left=false;
   if(e.key==='ArrowRight')keys.right=false;
   if(e.key===' ')keys.fire=false;
 });
 
-document.querySelectorAll('.btn').forEach(el=>{
-  const k=el.dataset.key||el.textContent;
-  el.addEventListener('touchstart',e=>{
-    e.preventDefault();
-    if(k==='◀')keys.left=true;
-    if(k==='▶')keys.right=true;
-    if(k==='●')keys.fire=true;
-  });
-  el.addEventListener('touchend',e=>{
-    e.preventDefault();
-    if(k==='◀')keys.left=false;
-    if(k==='▶')keys.right=false;
-    if(k==='●')keys.fire=false;
-  });
+// Touch buttons
+document.querySelector('.btn.left').addEventListener('touchstart',function(e){e.preventDefault();keys.left=true;},{passive:false});
+document.querySelector('.btn.left').addEventListener('touchend',function(e){e.preventDefault();keys.left=false;},{passive:false});
+document.querySelector('.btn.right').addEventListener('touchstart',function(e){e.preventDefault();keys.right=true;},{passive:false});
+document.querySelector('.btn.right').addEventListener('touchend',function(e){e.preventDefault();keys.right=false;},{passive:false});
+document.querySelector('.btn.fire').addEventListener('touchstart',function(e){e.preventDefault();keys.fire=true;},{passive:false});
+document.querySelector('.btn.fire').addEventListener('touchend',function(e){e.preventDefault();keys.fire=false;},{passive:false});
+
+// Start game - wait for load then init
+window.addEventListener('load',function(){
+  resize(); // now viewport is definitely correct
+  
+  ship={x:FIELD_W/2,y:H-30};
+  spawnMush();spawnCenti();
+  
+  // Start loop after brief delay
+  setTimeout(function(){loop();},300);
 });
 
-// Start game
-ship={x:W/2,y:H-30};
-spawnMush();spawnCenti();
-loop();
+// Fallback if load already fired
+if(document.readyState==='complete'){window.addEventListener('load',function(){resize();ship={x:FIELD_W/2,y:H-30};spawnMush();spawnCenti();setTimeout(function(){loop();},300);});}
 </script>
 </body>
 </html>
