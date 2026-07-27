@@ -22,15 +22,12 @@ canvas{display:block;width:100%;height:100%}
 <script>
 const canvas=document.getElementById('game');
 const ctx=canvas.getContext('2d');
-const debugEl=document.getElementById('debug');
 
 let W,H,ship,bullets=[],centipedes=[],mushrooms=[];
 let score=0,lives=3,wave=1,gameOver=false;
 let keys={left:false,right:false,fire:false};
 
 const FIELD_W=320;
-let initDone=false;
-let collisionCount=0;
 
 function resize(){W=canvas.width=window.innerWidth;H=canvas.height=window.innerHeight;}
 
@@ -140,7 +137,6 @@ function checkCollisions(){
         }
       }
       if(hit){
-        collisionCount++;
         lives--;centipedes.splice(ci,1);
         if(lives<=0)gameOver=true;
         else ship={x:FIELD_W/2,y:H-30};
