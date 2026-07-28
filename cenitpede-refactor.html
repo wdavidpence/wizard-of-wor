@@ -84,14 +84,20 @@ function spawnCenti(){
   const fromLeft=(wave%2===1);
   const dirX=fromLeft?1:-1;
   const startX=fromLeft?-5:FIELD_W+5;
-  const spd=1.2+wave*0.15; // head speed
+  const spd=1.2+wave*0.15; // head speed per frame
+  const segGap=8; // visual gap between segments
   
   const segs=[];
   for(let i=0;i<segCount;i++){
-    // Spawn segments spaced by head speed so path-following maintains natural spacing
-    segs.push({x:startX-i*spd*dirX,y:-i*6-5,w:7,h:5,px:startX-i*spd*dirX,py:-i*6-5});
+    // Spawn segments with proper visual spacing
+    segs.push({x:startX-i*segGap*dirX,y:-i*6-5,w:7,h:5});
   }
-  centipedes.push({segs,dirX,speed:spd,mushCooldown:0});
+  // Position history buffer for perfect snake following
+  const trail=[];
+  for(let i=0;i<segCount*2+10;i++){
+    trail.push({x:startX-i*spd*dirX,y:-i*6-5});
+  }
+  centipedes.push({segs,dirX,speed:spd,mushCooldown:0,trail});
 }
 
 function spawnMush(){
@@ -103,15 +109,16 @@ function spawnMush(){
   }
 }
 
-// === Centipede update - path-following for perfect snake movement ===
+// === Centipede update - trail-based for perfect snake movement ===
 function updateCenti(c){
   const head=c.segs[0];
   if(!c.mushCooldown)c.mushCooldown=0;
   
-  // Save current positions before moving (for path-following)
-  for(let i=0;i<c.segs.length;i++){
-    c.segs[i].px=c.segs[i].x;c.segs[i].py=c.segs[i].y;
-  }
+  // Record head's current position in trail buffer (before moving)
+  if(!c.trail)c.trail=[];
+  c.trail.unshift({x:head.x,y:head.y});
+  // Keep trail bounded (enough for all segments + buffer)
+  if(c.trail.length>c.segs.length*3+20)c.trail.pop();
   
   // Move head horizontally
   head.x+=c.dirX*c.speed;
@@ -134,11 +141,14 @@ function updateCenti(c){
   // Wall bounce - reverse and drop down
   if(head.x<-10||head.x>FIELD_W+10){c.dirX*=-1;head.y+=8;}
   
-  // Body segments follow the path - each moves to where predecessor WAS last frame
+  // Body segments follow the trail - each snaps to a fixed offset in history
   for(let i=1;i<c.segs.length;i++){
-    const prev=c.segs[i-1];const curr=c.segs[i];
-    // Move to predecessor's previous position (perfect snake trail)
-    curr.x=prev.px;curr.y=prev.py;
+    // Each segment follows at a fixed trail offset (maintains constant spacing)
+    const trailIdx=i*2; // 2 frames per segment gap = smooth following at ~8px spacing
+    if(trailIdx<c.trail.length){
+      c.segs[i].x=c.trail[trailIdx].x;
+      c.segs[i].y=c.trail[trailIdx].y;
+    }
   }
   
   // Mushroom collision damage from all segments
@@ -619,7 +629,8 @@ function checkCollisions(){
             addFloatText(seg.x,seg,['HEAD!','+50'],'#f84');
             // Remove head; remaining body becomes new centipede going OPPOSITE direction
             c.segs.splice(0,1);
-            centipedes.push({segs:c.segs.slice(),dirX:-c.dirX,speed:c.speed,mushCooldown:0});
+            const newTrail=[];for(let i=0;i<c.segs.length*3+10;i++)newTrail.push({x:c.segs[0].x,y:c.segs[0].y});
+            centipedes.push({segs:c.segs.slice(),dirX:-c.dirX,speed:c.speed,mushCooldown:0,trail:newTrail});
             c.segs=[]; // clear original so it gets cleaned up naturally
           }else{
             // === BODY HIT - SPLIT INTO TWO CENTIPEDES ===
@@ -631,7 +642,8 @@ function checkCollisions(){
             // Tail portion: segments after hit (becomes new centipede going OPPOSITE)
             const tail=c.segs.splice(0);
             if(tail.length>0){
-              centipedes.push({segs:tail,dirX:-c.dirX,speed:c.speed,mushCooldown:0});
+              const newTrail=[];for(let i=0;i<tail.length*3+10;i++)newTrail.push({x:tail[0].x,y:tail[0].y});
+              centipedes.push({segs:tail,dirX:-c.dirX,speed:c.speed,mushCooldown:0,trail:newTrail});
             }
           }
           break;
