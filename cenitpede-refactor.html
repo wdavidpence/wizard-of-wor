@@ -15,10 +15,9 @@ canvas{display:block;width:100%;height:100%}
 </head>
 <body>
 <canvas id="game"></canvas>
-
-<div class="btn left">◀</div>
-<div class="btn right">▶</div>
-<div class="btn fire">●</div>
+<div class="btn left">&#9664;</div>
+<div class="btn right">&#9654;</div>
+<div class="btn fire">&#8226;</div>
 <script>
 const canvas=document.getElementById('game');
 const ctx=canvas.getContext('2d');
@@ -26,56 +25,123 @@ const ctx=canvas.getContext('2d');
 let W,H,ship,bullets=[],centipedes=[],mushrooms=[];
 let score=0,lives=3,wave=1,gameOver=false;
 let keys={left:false,right:false,fire:false};
+let particles=[],floatText=[];
+let waveClearMsg='',waveClearFrames=0,nextWaveDelay=0;
 
-const FIELD_W=320;
+// === Configuration - grid reduced ~30% from original 10x6/320px ===
+const FIELD_W=240;          // was 320, reduced ~25%
+const MUSH_COLS=7;          // was 10, reduced 30%
+const MUSH_ROWS=4;          // was 6, reduced 33%
+const SEG_SPACING=10;       // tight spacing so segments stay visually connected
+
+const DIR={NONE:0,LEFT:1,RIGHT:2,UP:3,DOWN:4};
+const DVEC={[DIR.LEFT]:{x:-1,y:0},[DIR.RIGHT]:{x:1,y:0},[DIR.UP]:{x:0,y:-1},[DIR.DOWN]:{x:0,y:1}};
 
 function resize(){W=canvas.width=window.innerWidth;H=canvas.height=window.innerHeight;}
 
+// === Utility functions ===
+function addParticles(x,y,color,count){
+  for(let i=0;i<count;i++)particles.push({x,y,vx:(Math.random()-.5)*4,vy:(Math.random()-.5)*4,life:20+Math.random()*15,color,size:2+Math.random()*3});
+}
+
+function addFloatText(x,y,text,color){
+  floatText.push({x,y,text:typeof text==='string'?[text]:text,color:color||'#ff0',life:60,vy:-1});
+}
+
+// === Input handling ===
+document.addEventListener('keydown',function(e){
+  if(e.key==='ArrowLeft')keys.left=true;
+  if(e.key==='ArrowRight')keys.right=true;
+  if(e.key===' ')keys.fire=true;
+  if(['ArrowLeft','ArrowRight',' '].includes(e.key))e.preventDefault();
+});
+document.addEventListener('keyup',function(e){
+  if(e.key==='ArrowLeft')keys.left=false;
+  if(e.key==='ArrowRight')keys.right=false;
+  if(e.key===' ')keys.fire=false;
+});
+
+document.querySelector('.btn.left').addEventListener('touchstart',function(e){e.preventDefault();keys.left=true;},{passive:false});
+document.querySelector('.btn.left').addEventListener('touchend',function(e){e.preventDefault();keys.left=false;},{passive:false});
+document.querySelector('.btn.right').addEventListener('touchstart',function(e){e.preventDefault();keys.right=true;},{passive:false});
+document.querySelector('.btn.right').addEventListener('touchend',function(e){e.preventDefault();keys.right=false;},{passive:false});
+document.querySelector('.btn.fire').addEventListener('touchstart',function(e){e.preventDefault();keys.fire=true;},{passive:false});
+document.querySelector('.btn.fire').addEventListener('touchend',function(e){e.preventDefault();keys.fire=false;},{passive:false});
+
+// === Game initialization ===
+function startGame(){
+  score=0;lives=3;wave=1;gameOver=false;
+  bullets=[];centipedes=[];mushrooms=[];particles=[];floatText=[];
+  waveClearMsg='';waveClearFrames=0;nextWaveDelay=0;
+  ship={x:FIELD_W/2,y:H-30};
+  spawnMush();spawnCenti();
+}
+
+// === Centipede spawning ===
 function spawnCenti(){
+  const segCount=9;
+  // Alternate entry side and direction each wave
+  const fromLeft=(wave%2===1);
+  const dirX=fromLeft?1:-1;
+  const startX=fromLeft?-SEG_SPACING:FIELD_W+SEG_SPACING;
+  
   const segs=[];
-  const startX=Math.random()*FIELD_W*0.7;
-  for(let i=0;i<9;i++){
-    segs.push({x:startX+i*8,y:-i*6-5,w:7,h:5});
+  for(let i=0;i<segCount;i++){
+    // Segments enter from top, staggered so they stream in
+    segs.push({x:startX-i*SEG_SPACING*dirX,y:-i*SEG_SPACING-5,w:7,h:5});
   }
-  centipedes.push({segs,dirX:1,speed:2,waveColor:wave,frameCount:0});
+  centipedes.push({segs,dirX,speed:1.2+wave*0.15,mushCooldown:0});
 }
 
 function spawnMush(){
-  const COLS=10;const ROWS=6;
-  const mushW=FIELD_W/COLS;
-  for(let r=0;r<ROWS;r++){
-    for(let c=0;c<COLS;c++){
+  const mushW=FIELD_W/MUSH_COLS;
+  for(let r=0;r<MUSH_ROWS;r++){
+    for(let c=0;c<MUSH_COLS;c++){
       mushrooms.push({x:mushW*c+mushW/2,y:50+r*24,w:mushW*0.7,h:16,hp:4});
     }
   }
 }
 
+// === Centipede update ===
 function updateCenti(c){
   const head=c.segs[0];
-  if(!c.frameCount)c.frameCount=0;
-  c.frameCount++;
-  if(c.frameCount%8===0){head.y+=1;}
-
-  // Mushroom collision turns head
+  if(!c.mushCooldown)c.mushCooldown=0;
+  
+  // Horizontal movement
+  head.x+=c.dirX*c.speed;
+  
+  // Slow downward progression (1px every 8 frames)
+  c.mushCooldown++;
+  if(c.mushCooldown%8===0){head.y+=1;}
+  
+  // Mushroom collision - turn and drop down
   for(let i=0;i<mushrooms.length;i++){
     const m=mushrooms[i];
     if(head.x+head.w/2>m.x-m.w/2&&head.x-head.w/2<m.x+m.w/2&&
        head.y+head.h/2>m.y-m.h/2&&head.y-head.h/2<m.y+m.h/2){
-      c.dirX*=-1;head.y+=16;break;
+      if(c.mushCooldown>15){ // cooldown prevents rapid bouncing
+        c.dirX*=-1;head.y+=16;c.mushCooldown=0;break;
+      }
     }
   }
-
-  if(head.x<0||head.x>FIELD_W){c.dirX*=-1;head.y+=8;}
-  head.x+=c.dirX*c.speed;
-
+  
+  // Wall bounce - reverse and drop down
+  if(head.x<-10||head.x>FIELD_W+10){c.dirX*=-1;head.y+=8;}
+  
+  // Body segments follow the leader with tight spacing
   for(let i=1;i<c.segs.length;i++){
     const prev=c.segs[i-1];const curr=c.segs[i];
     const dx=prev.x-curr.x,dy=prev.y-curr.y;
     const dist=Math.hypot(dx,dy);
-    if(dist>0){const step=Math.min(c.speed*0.8,dist);curr.x+=dx/dist*step;curr.y+=dy/dist*step;}
+    // Only move if segment is further than target spacing from predecessor
+    if(dist>SEG_SPACING){
+      const step=dist-SEG_SPACING;
+      curr.x+=dx/dist*step;curr.y+=dy/dist*step;
+    }
   }
-
-  for(let si=c.segs.length-1;si>=0;si--){
+  
+  // Mushroom collision damage from all segments
+  for(let si=0;si<c.segs.length;si++){
     const seg=c.segs[si];
     for(let mi=mushrooms.length-1;mi>=0;mi--){
       const m=mushrooms[mi];
@@ -84,15 +150,40 @@ function updateCenti(c){
       }
     }
   }
-
+  
+  // Game over if head reaches bottom
   if(head.y>H-20){gameOver=true;}
 }
 
+// === Drawing functions ===
 function drawCenti(c,ox,oy){
   for(let i=0;i<c.segs.length;i++){
     const seg=c.segs[i];
-    ctx.fillStyle=i===0?'#ff4422':'#cc3311';
-    ctx.fillRect(ox+seg.x-seg.w/2,oy+seg.y-seg.h/2,seg.w,seg.h);
+    if(i===0){
+      // HEAD - red/orange with antennae and eyes
+      ctx.fillStyle='#ff4422';
+      ctx.fillRect(ox+seg.x-seg.w/2-1,oy+seg.y-seg.h/2-2,seg.w+2,seg.h+4);
+      // Antennae
+      ctx.strokeStyle='#ff6644';ctx.lineWidth=1;
+      ctx.beginPath();
+      ctx.moveTo(ox+seg.x-seg.w/2,oy+seg.y);
+      ctx.lineTo(ox+seg.x-seg.w/2-3,oy+seg.y-5);
+      ctx.moveTo(ox+seg.x+seg.w/2,oy+seg.y);
+      ctx.lineTo(ox+seg.x+seg.w/2+3,oy+seg.y-5);
+      ctx.stroke();
+      // Eyes
+      ctx.fillStyle='#fff';
+      ctx.fillRect(ox+seg.x-2,oy+seg.y-seg.h/2,2,2);
+      ctx.fillRect(ox+seg.x+1,oy+seg.y-seg.h/2,2,2);
+    }else if(i===c.segs.length-1){
+      // TAIL - thinner green segment
+      ctx.fillStyle='#44cc22';
+      ctx.fillRect(ox+seg.x-seg.w/3,oy+seg.y-seg.h/2,seg.w*2/3,seg.h);
+    }else{
+      // BODY - alternating colors for banded look
+      ctx.fillStyle=i%2===0?'#cc3311':'#dd5533';
+      ctx.fillRect(ox+seg.x-seg.w/2,oy+seg.y-seg.h/2,seg.w,seg.h);
+    }
   }
 }
 
@@ -101,135 +192,217 @@ function drawMush(m,ox,oy){
   ctx.fillStyle='#3a8030';ctx.beginPath();ctx.arc(ox+m.x,oy+m.y-2,m.w/2,Math.PI,Math.PI*2);ctx.fill();
 }
 
+function drawShip(s,ox,oy){
+  ctx.fillStyle='#2a6aaa';ctx.fillRect(ox+s.x-12,oy+s.y,24,10);
+  ctx.fillStyle='#44aaff';ctx.fillRect(ox+s.x-3,oy+s.y-4,6,4);
+}
+
+function drawParticles(){
+  for(let i=0;i<particles.length;i++){
+    const p=particles[i];
+    ctx.globalAlpha=p.life/35;
+    ctx.fillStyle=p.color;
+    ctx.fillRect(p.x,p.y,p.size,p.size);
+  }
+  ctx.globalAlpha=1;
+}
+
+function drawFloatText(){
+  for(let i=0;i<floatText.length;i++){
+    const ft=floatText[i];
+    ctx.globalAlpha=Math.min(1,ft.life/20);
+    ctx.fillStyle=ft.color;ctx.font='bold 11px monospace';
+    for(let j=0;j<ft.text.length;j++){
+      ctx.fillText(ft.text[j],ft.x,ft.y-j*13);
+    }
+  }
+  ctx.globalAlpha=1;
+}
+
+// === Collision detection ===
 function checkCollisions(){
-  // Bullet-centipede
+  // Bullet-centipede collisions
   for(let bi=bullets.length-1;bi>=0;bi--){
-    const b=bullets[bi];
-    for(let ci=centipedes.length-1;ci>=0;ci--){
+    const b=bullets[bi];let bulletHit=false;
+    for(let ci=0;ci<centipedes.length&&!bulletHit;ci++){
       const c=centipedes[ci];
       for(let sk=c.segs.length-1;sk>=0;sk--){
         const seg=c.segs[sk];
-        if(b.x>seg.x-seg.w/2&&b.x<seg.x+seg.w/2&&b.y>seg.y-seg.h/2&&b.y<seg.y+seg.h/2){
-          bullets.splice(bi,1);score+=10;
-          if(sk===0){c.segs.splice(0,1);if(c.segs.length===0)centipedes.splice(ci,1);}
-          else{const head=c.segs.splice(0,sk+1);const tail=c.segs.splice(0);if(tail.length>0)centipedes.push({segs:tail,dirX:c.dirX,speed:c.speed,waveColor:c.waveColor,frameCount:0});}
+        if(b.x>seg.x-seg.w/2&&b.x<seg.x+seg.w/2&&
+           b.y>seg.y-seg.h/2&&b.y<seg.y+seg.h/2){
+          bullets.splice(bi,1);bulletHit=true;
+          
+          if(c.segs.length===1){
+            // === HEAD HIT WITH NO TAIL - CENTIPEDE FULLY DESTROYED ===
+            // Bonus for destroying the last segment!
+            score+=200;
+            addParticles(seg.x,seg,'#ff4422',15);
+            addFloatText(seg.x,seg,['BONUS!','+200'],'#ff0');
+            centipedes.splice(ci,1);
+          }else if(sk===0){
+            // === HEAD HIT WITH TAIL REMAINING ===
+            score+=50;
+            addParticles(seg.x,seg,'#ff4422',10);
+            addFloatText(seg.x,seg,['HEAD!','+50'],'#f84');
+            // Remove head; remaining body becomes new centipede going OPPOSITE direction
+            c.segs.splice(0,1);
+            centipedes.push({segs:c.segs.slice(),dirX:-c.dirX,speed:c.speed,mushCooldown:0});
+            c.segs=[]; // clear original so it gets cleaned up naturally
+          }else{
+            // === BODY HIT - SPLIT INTO TWO CENTIPEDES ===
+            score+=10;
+            addParticles(seg.x,seg,'#cc3311',8);
+            addFloatText(seg.x,seg,'+10','#ff8');
+            // Front portion: head + segments before hit (continues same direction)
+            const front=c.segs.splice(0,sk);
+            // Tail portion: segments after hit (becomes new centipede going OPPOSITE)
+            const tail=c.segs.splice(0);
+            if(tail.length>0){
+              centipedes.push({segs:tail,dirX:-c.dirX,speed:c.speed,mushCooldown:0});
+            }
+          }
           break;
         }
       }
     }
   }
-
-  // Ship-centipede - only check if centipede is actually in ship's Y range
+  
+  // Clean up empty centipedes
+  for(let i=centipedes.length-1;i>=0;i--){
+    if(centipedes[i].segs.length===0)centipedes.splice(i,1);
+  }
+  
+  // Ship-centipede collision
   if(ship&&!gameOver){
     for(let ci=0;ci<centipedes.length;ci++){
       const c=centipedes[ci];let hit=false;
-      for(let si=0;si<c.segs.length;si++){
+      for(let si=0;si<c.segs.length&&!hit;si++){
         const seg=c.segs[si];
-        // Ship rect: x=[ship.x-12, ship.x+12], y=[ship.y, ship.y+10]
-        // Only check collision if centipede is in the bottom portion of screen where ship lives
-        const segBottom=seg.y+seg.h/2;
-        const segTop=seg.y-seg.h/2;
-        // Ship is at ship.y (bottom of screen area)
-        if(segTop<ship.y+10&&segBottom>ship.y){
-          if(ship.x>seg.x-seg.w/2-12&&ship.x<seg.x+seg.w/2+12){
-            hit=true;break;
-          }
+        if(seg.y-seg.h/2<ship.y+10&&seg.y+seg.h/2>ship.y){
+          if(ship.x>seg.x-seg.w/2-12&&ship.x<seg.x+seg.w/2+12){hit=true;}
         }
       }
       if(hit){
-        lives--;centipedes.splice(ci,1);
-        if(lives<=0)gameOver=true;
+        lives--;addParticles(ship.x,ship.y,'#2a6aaa',12);
+        centipedes.splice(ci,1);
+        if(lives<=0){gameOver=true;}
         else ship={x:FIELD_W/2,y:H-30};
       }
     }
   }
 }
 
+// === Wave management ===
+function checkWaveClear(){
+  if(centipedes.length===0&&waveClearMsg===''&&nextWaveDelay===0&&!gameOver){
+    waveClearMsg='WAVE CLEAR!';
+    waveClearFrames=120; // display for 2 seconds
+  }
+}
+
+function updateWaveTransition(){
+  if(waveClearFrames>0){waveClearFrames--;return;}
+  if(nextWaveDelay>0){nextWaveDelay--;if(nextWaveDelay===0)spawnNextWave();}
+}
+
+function spawnNextWave(){
+  wave++;
+  const numCentipedes=Math.min(wave,5);
+  for(let i=0;i<numCentipedes;i++)spawnCenti();
+}
+
+// === Particle and float text updates ===
+function updateParticles(){
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];p.x+=p.vx;p.y+=p.vy;p.life--;
+    p.vx*=0.95;p.vy*=0.95;
+    if(p.life<=0)particles.splice(i,1);
+  }
+}
+
+function updateFloatText(){
+  for(let i=floatText.length-1;i>=0;i--){
+    const ft=floatText[i];ft.y+=ft.vy;ft.life--;
+    if(ft.life<=0)floatText.splice(i,1);
+  }
+}
+
+// === Main game loop ===
 function loop(){
   ctx.fillStyle='#051a0a';ctx.fillRect(0,0,W,H);
-
-  const ox=(W-FIELD_W)/2;
-  const oy=30;
-
+  const ox=(W-FIELD_W)/2;const oy=30;
+  
   if(!gameOver){
-    // Update ship (field coords)
+    // Ship movement
     if(keys.left)ship.x=Math.max(12,ship.x-6);
     if(keys.right)ship.x=Math.min(FIELD_W-12,ship.x+6);
-
-    // Fire bullet
+    
+    // Fire bullet (with rate limiting)
     if(keys.fire&&bullets.length<5){keys.fire=false;bullets.push({x:ship.x,y:ship.y-8,dy:-10});}
-
+    
     // Update centipedes
     for(let i=centipedes.length-1;i>=0;i--)updateCenti(centipedes[i]);
-
+    
     // Update bullets
     for(let i=bullets.length-1;i>=0;i--){bullets[i].y+=bullets[i].dy;if(bullets[i].y<-10)bullets.splice(i,1);}
-
+    
     // Check collisions
     checkCollisions();
-
-    // Draw everything in field coords + offset
+    
+    // Update effects
+    updateParticles();updateFloatText();
+    
+    // Wave management
+    checkWaveClear();updateWaveTransition();
+    
+    // === Draw everything ===
     for(let i=0;i<mushrooms.length;i++)drawMush(mushrooms[i],ox,oy);
     for(let i=0;i<centipedes.length;i++)drawCenti(centipedes[i],ox,oy);
     for(let i=0;i<bullets.length;i++){ctx.fillStyle='#ffa020';ctx.fillRect(ox+bullets[i].x-1,oy+bullets[i].y,3,6);}
-    if(ship){ctx.fillStyle='#2a6aaa';ctx.fillRect(ox+ship.x-12,oy+ship.y,24,10);}
-
+    if(ship)drawShip(ship,ox,oy);
+    
     // Field border
     ctx.strokeStyle='#336633';ctx.lineWidth=2;ctx.strokeRect(ox,oy,FIELD_W,H-oy);
-
+    
+    // Particles and floating text (screen coords)
+    drawParticles();drawFloatText();
+    
     // HUD
     ctx.fillStyle='#fff';ctx.font='bold 14px monospace';
     ctx.fillText('SCORE '+score,12,20);ctx.fillText('LIVES '+lives,12,38);
     ctx.fillText('WAVE '+wave,W-70,24);
-
+    
+    // Wave clear message
+    if(waveClearMsg&&waveClearFrames>0){
+      ctx.fillStyle='#4f4';ctx.font='bold 20px monospace';
+      const tw=ctx.measureText(waveClearMsg).width;
+      ctx.fillText(waveClearMsg,W/2-tw/2,H/2-30);
+    }
+    if(nextWaveDelay>0){
+      ctx.fillStyle='#ff4';ctx.font='bold 16px monospace';
+      const nw='NEXT WAVE...';const nw2=ctx.measureText(nw).width;
+      ctx.fillText(nw,W/2-nw2/2,H/2);
+    }
+    
   }else{
+    // Game over - static render
     for(let i=0;i<mushrooms.length;i++)drawMush(mushrooms[i],ox,oy);
     for(let i=0;i<centipedes.length;i++)drawCenti(centipedes[i],ox,oy);
     ctx.strokeStyle='#336633';ctx.lineWidth=2;ctx.strokeRect(ox,oy,FIELD_W,H-oy);
     ctx.fillStyle='#f66';ctx.font='bold 28px monospace';
-    ctx.fillText('GAME OVER',W/2-80,H/2);
+    const goText='GAME OVER',goW=ctx.measureText(goText).width;
+    ctx.fillText(goText,W/2-goW/2,H/2-20);
+    ctx.fillStyle='#ff0';ctx.font='bold 14px monospace';
+    const scText='SCORE: '+score,scW=ctx.measureText(scText).width;
+    ctx.fillText(scText,W/2-scW/2,H/2+10);
   }
-
-
-
+  
   requestAnimationFrame(loop);
 }
 
-// Input handlers - keyboard
-document.addEventListener('keydown',function(e){
-  if(e.key==='ArrowLeft')keys.left=true;
-  if(e.key==='ArrowRight')keys.right=true;
-  if(e.key===' ')keys.fire=true;
-  if(['ArrowLeft','ArrowRight',' '].includes(e.key))e.preventDefault();
-});
-
-document.addEventListener('keyup',function(e){
-  if(e.key==='ArrowLeft')keys.left=false;
-  if(e.key==='ArrowRight')keys.right=false;
-  if(e.key===' ')keys.fire=false;
-});
-
-// Touch buttons
-document.querySelector('.btn.left').addEventListener('touchstart',function(e){e.preventDefault();keys.left=true;},{passive:false});
-document.querySelector('.btn.left').addEventListener('touchend',function(e){e.preventDefault();keys.left=false;},{passive:false});
-document.querySelector('.btn.right').addEventListener('touchstart',function(e){e.preventDefault();keys.right=true;},{passive:false});
-document.querySelector('.btn.right').addEventListener('touchend',function(e){e.preventDefault();keys.right=false;},{passive:false});
-document.querySelector('.btn.fire').addEventListener('touchstart',function(e){e.preventDefault();keys.fire=true;},{passive:false});
-document.querySelector('.btn.fire').addEventListener('touchend',function(e){e.preventDefault();keys.fire=false;},{passive:false});
-
-// Start game - wait for load then init
-window.addEventListener('load',function(){
-  resize(); // now viewport is definitely correct
-  
-  ship={x:FIELD_W/2,y:H-30};
-  spawnMush();spawnCenti();
-  
-  // Start loop after brief delay
-  setTimeout(function(){loop();},300);
-});
-
-// Fallback if load already fired
-if(document.readyState==='complete'){window.addEventListener('load',function(){resize();ship={x:FIELD_W/2,y:H-30};spawnMush();spawnCenti();setTimeout(function(){loop();},300);});}
+// === Start game on load ===
+window.addEventListener('load',function(){resize();startGame();setTimeout(function(){loop();},300);});
+if(document.readyState==='complete'){resize();startGame();setTimeout(function(){loop();},300);}
 </script>
 </body>
 </html>
