@@ -128,14 +128,14 @@ function updateCenti(c){
   // Wall bounce - reverse and drop down
   if(head.x<-10||head.x>FIELD_W+10){c.dirX*=-1;head.y+=8;}
   
-  // Body segments follow the leader with tight spacing
+  // Body segments follow the leader - classic snake movement
   for(let i=1;i<c.segs.length;i++){
     const prev=c.segs[i-1];const curr=c.segs[i];
     const dx=prev.x-curr.x,dy=prev.y-curr.y;
     const dist=Math.hypot(dx,dy);
-    // Only move if segment is further than target spacing from predecessor
-    if(dist>SEG_SPACING){
-      const step=dist-SEG_SPACING;
+    // Always move toward predecessor at 80% of centipede speed
+    if(dist>0){
+      const step=Math.min(c.speed*0.8,dist);
       curr.x+=dx/dist*step;curr.y+=dy/dist*step;
     }
   }
