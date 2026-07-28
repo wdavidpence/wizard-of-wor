@@ -83,14 +83,15 @@ function spawnCenti(){
   // Alternate entry side and direction each wave
   const fromLeft=(wave%2===1);
   const dirX=fromLeft?1:-1;
-  const startX=fromLeft?-SEG_SPACING:FIELD_W+SEG_SPACING;
+  const startX=fromLeft?-5:FIELD_W+5;
+  const spd=1.2+wave*0.15; // head speed
   
   const segs=[];
   for(let i=0;i<segCount;i++){
-    // Segments enter from top, staggered so they stream in
-    segs.push({x:startX-i*SEG_SPACING*dirX,y:-i*SEG_SPACING-5,w:7,h:5});
+    // Spawn segments spaced by head speed so path-following maintains natural spacing
+    segs.push({x:startX-i*spd*dirX,y:-i*6-5,w:7,h:5,px:startX-i*spd*dirX,py:-i*6-5});
   }
-  centipedes.push({segs,dirX,speed:1.2+wave*0.15,mushCooldown:0});
+  centipedes.push({segs,dirX,speed:spd,mushCooldown:0});
 }
 
 function spawnMush(){
@@ -102,12 +103,17 @@ function spawnMush(){
   }
 }
 
-// === Centipede update ===
+// === Centipede update - path-following for perfect snake movement ===
 function updateCenti(c){
   const head=c.segs[0];
   if(!c.mushCooldown)c.mushCooldown=0;
   
-  // Horizontal movement
+  // Save current positions before moving (for path-following)
+  for(let i=0;i<c.segs.length;i++){
+    c.segs[i].px=c.segs[i].x;c.segs[i].py=c.segs[i].y;
+  }
+  
+  // Move head horizontally
   head.x+=c.dirX*c.speed;
   
   // Slow downward progression (1px every 8 frames)
@@ -128,16 +134,11 @@ function updateCenti(c){
   // Wall bounce - reverse and drop down
   if(head.x<-10||head.x>FIELD_W+10){c.dirX*=-1;head.y+=8;}
   
-  // Body segments follow the leader - classic snake movement
+  // Body segments follow the path - each moves to where predecessor WAS last frame
   for(let i=1;i<c.segs.length;i++){
     const prev=c.segs[i-1];const curr=c.segs[i];
-    const dx=prev.x-curr.x,dy=prev.y-curr.y;
-    const dist=Math.hypot(dx,dy);
-    // Always move toward predecessor at 80% of centipede speed
-    if(dist>0){
-      const step=Math.min(c.speed*0.8,dist);
-      curr.x+=dx/dist*step;curr.y+=dy/dist*step;
-    }
+    // Move to predecessor's previous position (perfect snake trail)
+    curr.x=prev.px;curr.y=prev.py;
   }
   
   // Mushroom collision damage from all segments
